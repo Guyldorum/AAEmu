@@ -13,6 +13,7 @@ using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Skills.Effects;
 using AAEmu.Game.Models.Game.Slaves;
+using AAEmu.Game.Models.Game.Static;
 using AAEmu.Game.Models.Game.Units.Static;
 using AAEmu.Game.Models.StaticValues;
 using AAEmu.Game.Physics;
@@ -687,6 +688,71 @@ public class Slave : Unit
     /// <param name="damage"></param>
     /// <param name="isPercent"></param>
     /// <param name="killReason"></param>
+    // ===== Ship Physics damage hooks (added by lot 3A.4, used by Ship*Interaction) =====
+    public void TickBeachedHullDamage(TimeSpan deltaTime)
+    {
+        if (!GroundContactLatched) { ShoreGroundDamageSecondsAccumulator = 0f; return; }
+        const float IntervalSec = 1f;
+        const int PercentPerTick = 1;
+        var dt = (float)deltaTime.TotalSeconds;
+        if (dt <= 0f) return;
+        ShoreGroundDamageSecondsAccumulator += dt;
+        while (ShoreGroundDamageSecondsAccumulator >= IntervalSec)
+        {
+            ShoreGroundDamageSecondsAccumulator -= IntervalSec;
+            ApplyFloorCollisionDamageImmediate(PercentPerTick, isPercent: true);
+        }
+    }
+
+    public void TickStaticObstacleHullDamage(TimeSpan deltaTime)
+    {
+        const float IntervalSec = 1f;
+        const int PercentPerTick = 1;
+        const float ResetAccumulatorAfterNoContactSec = 0.35f;
+        var dt = (float)deltaTime.TotalSeconds;
+        if (dt <= 0f) return;
+        if (StaticObstacleHullDamageContactActive)
+        {
+            StaticObstacleHullDamageNoContactSeconds = 0f;
+            StaticObstacleHullDamageSecondsAccumulator += dt;
+            while (StaticObstacleHullDamageSecondsAccumulator >= IntervalSec)
+            {
+                StaticObstacleHullDamageSecondsAccumulator -= IntervalSec;
+                ApplyFloorCollisionDamageImmediate(PercentPerTick, isPercent: true);
+            }
+        }
+        else
+        {
+            StaticObstacleHullDamageNoContactSeconds += dt;
+            if (StaticObstacleHullDamageNoContactSeconds >= ResetAccumulatorAfterNoContactSec)
+                StaticObstacleHullDamageSecondsAccumulator = 0f;
+        }
+    }
+
+    internal void ApplyShipHullCollisionDamage(Slave attacker, int damagePercent)
+    {
+        if (damagePercent <= 0 || Hp <= 0) return;
+        var damage = MaxHp * damagePercent / 100;
+        if (damage <= 0) return;
+        var oldHp = Hp;
+        ReduceCurrentHp(attacker, damage, KillReason.Damage);
+        var dealt = oldHp - Hp;
+        if (dealt <= 0) return;
+        BroadcastPacket(new SCEnvDamagePacket(EnvSource.Collision, ObjId, (uint)dealt), true);
+    }
+
+    private void ApplyFloorCollisionDamageImmediate(int damage, bool isPercent = true, KillReason killReason = KillReason.Damage)
+    {
+        if (isPercent) damage = MaxHp * damage / 100;
+        if (damage <= 0) return;
+        var oldHp = Hp;
+        ReduceCurrentHp(this, damage, killReason);
+        var dealt = oldHp - Hp;
+        if (dealt <= 0) return;
+        BroadcastPacket(new SCEnvDamagePacket(EnvSource.Collision, ObjId, (uint)dealt), true);
+    }
+    // ===== end Ship Physics damage hooks =====
+
     public void DoFloorCollisionDamage(int damage, bool isPercent = true, KillReason killReason = KillReason.Damage)
     {
         // If % based, calculate its damage

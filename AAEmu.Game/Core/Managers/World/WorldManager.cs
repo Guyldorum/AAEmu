@@ -1065,6 +1065,13 @@ public class WorldManager(
         return result;
     }
 
+    /// <summary>Fills <paramref name="result"/> (cleared first) with objects within radius. Use from hot paths to avoid allocations.</summary>
+    public static void GetAround<T>(GameObject obj, float radius, List<T> result, bool useModelSize = false) where T : class
+    {
+        result.Clear();
+        result.AddRange(GetAround<T>(obj, radius, useModelSize));
+    }
+
     /// <summary>
     /// Gets a list of all T GameObjects within the target GameObject's neighbourhood
     /// </summary>

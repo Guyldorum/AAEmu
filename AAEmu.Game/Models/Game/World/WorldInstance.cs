@@ -415,6 +415,9 @@ public class WorldInstance(WorldTemplate template, uint channelId, bool dontFree
     /// <returns></returns>
     public float GetHeight(Vector3 pos) => GetHeight(pos, out _);
 
+    /// <summary>Terrain-only height query (no ray cast against rigid bodies). Used by Ship*Interaction.</summary>
+    public float GetHeight(float x, float y) => Template.GetHeight(x, y);
+
     public float GetReferenceHeight(NpcAi ai, Vector3 pos, uint zoneId)
     {
         var solidFloorHeight = GetHeight(pos);
