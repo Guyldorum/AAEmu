@@ -60,6 +60,32 @@ public class Slave : Unit
     public float CachedWaterSurface { get; set; }
     public float CachedFloorLevel { get; set; }
 
+    // ===== Ship Physics state (added by lot 3A.1, consumed by Ship*Interaction in later lots) =====
+    public float ThrottleSmoothed { get; set; }
+    public sbyte LastMoveDirSign { get; set; } = 1;
+    public float SteeringSmoothed { get; set; }
+    public float TurnSpeedVelocityMul { get; set; } = 1f;
+    public float BankAngle { get; set; }
+    public float GroundPitchAngle { get; set; }
+    public bool GroundedByStern { get; set; }
+    public bool GroundedLastTick { get; set; }
+    public float GroundStuckTime { get; set; }
+    public float GroundEscapeAssist { get; set; }
+    public bool GroundContactLatched { get; set; }
+    public float GroundContactFloorSmoothed { get; set; }
+    public float GroundPitchFrontFloorSmoothed { get; set; }
+    public float GroundPitchBackFloorSmoothed { get; set; }
+    public bool GroundPitchFloorSmoothingSeeded { get; set; }
+    public float WavePitchPhase { get; set; }
+    public bool GroundContactFloorSmoothingSeeded { get; set; }
+    public float GroundContactLatchedTime { get; set; }
+    public float ShoreGroundDamageSecondsAccumulator { get; set; }
+    public bool StaticObstacleHullDamageContactActive { get; set; }
+    public float StaticObstacleHullDamageSecondsAccumulator { get; set; }
+    public float StaticObstacleHullDamageNoContactSeconds { get; set; }
+    public Dictionary<uint, float> ShipHullCollisionDamageCooldownByOtherShipId { get; } = new();
+    // ===== end Ship Physics state =====
+
     public Slave()
     {
         AttachedDoodads = [];
