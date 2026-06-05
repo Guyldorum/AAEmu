@@ -11,10 +11,12 @@ using AAEmu.Game.Models.CryEngine;
 using AAEmu.Game.Models.CryEngine.Objects;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Models;
+using AAEmu.Game.Models.Game.Skills.SkillControllers;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Physics;
+using AAEmu.Game.Physics.Debug;
 using AAEmu.Game.Physics.Forces;
 using AAEmu.Game.Physics.HeightMaps;
 using AAEmu.Game.Physics.Util;
@@ -224,26 +226,24 @@ public class PhysicsManager
 
             while (ThreadRunning)
             {
-                // Reduce tick speed to 1/4th when loading terrain objects
+                // [HM-preserved] Reduce tick speed when loading terrain objects
                 var loadBalanceMultiplier = SimulationWorld.WorldCellTerrainLoadingTask == null ? 1f : 5f;
                 var targetStepTime = TimeSpan.FromSeconds(TargetPhysicsTickTime * loadBalanceMultiplier);
                 var currentTick = TimeSpan.FromMilliseconds(Environment.TickCount64);
                 var timeSinceLastTick = currentTick - lastTick;
                 accumulatedTime += timeSinceLastTick;
                 var timeToNextStep = lastTick + targetStepTime - currentTick;
-                // Only sleep if needed, otherwise, directly continue
                 if (timeToNextStep.TotalMilliseconds > 1)
                 {
                     Thread.Sleep((int)timeToNextStep.TotalMilliseconds);
                 }
                 else if (timeToNextStep.TotalMilliseconds < -TargetPhysicsTps)
                 {
-                    // If it's taking more than double the expected time, toss a warning if not loading terrain objects
+                    // [HM-preserved] Tiered warnings : Warn when not loading, Debug only if very slow during loading
                     if (SimulationWorld.WorldCellTerrainLoadingTask == null)
                     {
-                        Logger.Warn($"Physics thread is running slow in {SimulationWorld} at {timeSinceLastTick.TotalMilliseconds:F1} / {targetStepTime.TotalMilliseconds:F1} ms ({PhysWorld.RigidBodies.Count} RigidBodies)");                        
+                        Logger.Warn($"Physics thread is running slow in {SimulationWorld} at {timeSinceLastTick.TotalMilliseconds:F1} / {targetStepTime.TotalMilliseconds:F1} ms ({PhysWorld.RigidBodies.Count} RigidBodies)");
                     }
-                    // If it's still loading, only toss a DEBUG warning if it's taking at least 10 times long than a normal tick
                     else if (timeToNextStep.TotalMilliseconds < (TargetPhysicsTps * -9f))
                     {
                         Logger.Debug($"Physics thread is running slow in {SimulationWorld} at {timeSinceLastTick.TotalMilliseconds:F1} / {targetStepTime.TotalMilliseconds:F1} ms ({PhysWorld.RigidBodies.Count} RigidBodies)");
@@ -252,50 +252,31 @@ public class PhysicsManager
 
                 var physicsTotalDelta = TimeSpan.FromMilliseconds(Environment.TickCount64) - lastTick;
                 lastTick = currentTick;
+                _physicsLoopIndex++;  // [DEV-added] for cache stamp throttling
 
                 // 1. Process pending add/remove actions
                 while (_pendingActions.TryDequeue(out var action)) { action(); }
 
-                if (SimulationWorld.WorldCellTerrainLoadingTask != null)
-                {
-                    // Skip physics if loading data
-                    // continue;
-                }
-                
                 List<(RigidBody body, JVector vel, bool moving)> snapshot = [];
 
                 lock (_worldLock)
                 {
-
                     // 2. Take snapshot of bodies for state synchronization
                     foreach (var body in _bodies)
                     {
                         if (body == null) { continue; }
-
                         var vel = body.Velocity;
                         var moving = vel.LengthSquared() > 0.001f;
                         snapshot.Add((body, vel, moving));
                     }
 
                     // 3. Step the physics world
-                    // Potentially step multiple times to catch up if we were running behind.
                     PhysWorld.Step((float)physicsTotalDelta.TotalSeconds, false);
 
-                    // 4. Sync positions and broadcast outside lock
-                    // body, velocity, isMoving
+                    // 4. Pass 1 : per-ship physics, cache, harpoon recoil, shore contacts, water flow drift
+                    var shipsThisTick = new List<Slave>();
                     foreach (var (body, _, _) in snapshot)
                     {
-                        /*
-                        if (body.Tag is Npc npc)
-                        {
-                            // Update transform
-                            //UpdateNpcTransform(npc, velocity, isMoving);
-
-                            // Update avoidance controller
-                            //npc.AvoidanceController.Update(0.01f);
-                        }
-                        */
-
                         if (body.Tag is not Slave slave)
                             continue;
 
@@ -303,53 +284,145 @@ public class PhysicsManager
                         {
                             if (slave.Transform.WorldId != SimulationWorld.Id)
                                 continue;
-
-                            // Skip simulation if still summoning
                             if (slave.SpawnTime.AddSeconds(slave.Template.PortalTime) > DateTime.UtcNow)
                                 continue;
-
-                            // Skip simulation if no rigidbody applied to slave
                             if (!body.IsActive)
                                 continue;
 
-                            // TODO: move this
-                            var underPos = slave.Transform.World.Position + Vector3.UnitZ *
-                                (slave.ShipController?.ShipModel.MassBoxSizeZ ?? 1f) / -2f * slave.Scale;
-                            if (SimulationWorld.Water.IsWater(underPos, out var flowDirection))
+                            if (_shipControllers.TryGetValue(slave.Id, out _))
                             {
-                                if (flowDirection.Length() > 0f)
+                                // [DEV-added] Cache stamp: skip recompute when nearly idle
+                                var xy = new Vector2(slave.Transform.World.Position.X, slave.Transform.World.Position.Y);
+                                var refreshCache = true;
+                                if (_waterLandCacheStamp.TryGetValue(slave.Id, out var stamp))
                                 {
-                                    // We are in moving water, apply force
-                                    // var multiplier = slave.RigidBody.Mass / TargetPhysicsTickTime;
-                                    // slave.RigidBody.AddForce(new JVector(flowDirection.X * multiplier, flowDirection.Z * multiplier, flowDirection.Y * multiplier));
-                                    slave.RigidBody.Position += new JVector(
-                                        flowDirection.X * (float)physicsTotalDelta.TotalSeconds,
-                                        flowDirection.Z * (float)physicsTotalDelta.TotalSeconds,
-                                        flowDirection.Y * (float)physicsTotalDelta.TotalSeconds);
+                                    var loopsSince = _physicsLoopIndex - stamp.Loop;
+                                    var movedSq = Vector2.DistanceSquared(xy, stamp.Xy);
+                                    refreshCache = loopsSince >= 2 || movedSq > 1f;
                                 }
-                            }
+                                if (refreshCache)
+                                {
+                                    slave.CreateWaterAndLandSurfaceCache();
+                                    _waterLandCacheStamp[slave.Id] = (_physicsLoopIndex, xy);
+                                }
 
-                            if (_shipControllers.TryGetValue(slave.Id, out var boat))
-                            {
-                                // Create floor/surface cache
-                                slave.CreateWaterAndLandSurfaceCache();
-                                // Sync transform
                                 SyncTransformWithRigidBody(slave);
-                                // Do physics tick
                                 BoatPhysicsTick(slave, physicsTotalDelta);
-                                // Check if we collided
+
+                                // [HM-preserved] CheckLandCollisions HM intact
                                 CheckLandCollisions(slave, physicsTotalDelta);
-                                // Update Controls
-                                boat.ApplyForceAndTorque(slave, physicsTotalDelta);
-                                SendUpdatedMovementData(slave, slave.RigidBody, physicsTotalDelta);
+
+                                // [DEV-added] Harpoon recoil
+                                var dtSec = (float)physicsTotalDelta.TotalSeconds;
+                                var recoilDv = ShipHarpoonRopeController.TickTensionTearAndGetHullRecoilDeltaV(slave, dtSec);
+                                if (slave.RigidBody != null && (recoilDv.X * recoilDv.X + recoilDv.Y * recoilDv.Y) > 1e-8f)
+                                {
+                                    _ = new OneShotVelocityKick(PhysWorld, slave.RigidBody, new JVector(recoilDv.X, 0f, recoilDv.Y));
+                                }
+                                _shipShore.ResolveTerrainContacts(slave, physicsTotalDelta, PhysWorld);
+
+                                // [DEV-added] Water flow drift, gated by grounded state
+                                var underPos = slave.Transform.World.Position + Vector3.UnitZ * (slave.ShipController?.ShipModel.MassBoxSizeZ ?? 1f) / -2f * slave.Scale;
+                                if (SimulationWorld.Water.IsWater(underPos, out var flowDirection) && flowDirection.LengthSquared() > 1e-10f)
+                                {
+                                    var groundedNow = slave.GroundContactLatched || slave.CachedFloorLevel > slave.CachedWaterSurface;
+                                    if (!groundedNow)
+                                    {
+                                        var dtFlow = (float)physicsTotalDelta.TotalSeconds;
+                                        slave.RigidBody.Position += new JVector(flowDirection.X * dtFlow, flowDirection.Z * dtFlow, flowDirection.Y * dtFlow);
+                                    }
+                                }
+                                shipsThisTick.Add(slave);
                             }
                         }
                         catch (Exception slaveException)
                         {
-                            // Put a separate catch here to catch individual errors without it breaking all the physics in this world 
-                            Logger.Error(
-                                $"PhysicsThread Error on Slave {slave.Id} {slave.Name} ({slave.ObjId}): {slaveException.Message}\n{slaveException.StackTrace}");
+                            Logger.Error($"PhysicsThread Error on Slave {slave.Id} {slave.Name} ({slave.ObjId}): {slaveException.Message}\n{slaveException.StackTrace}");
                         }
+                    }
+
+                    // Pass 2 : Rope controller expiry (runs even when body inactive)
+                    foreach (var (body, _, _) in snapshot)
+                    {
+                        if (body.Tag is not Slave slave)
+                            continue;
+                        try
+                        {
+                            if (slave.Transform.WorldId != SimulationWorld.Id) continue;
+                            if (slave.SpawnTime.AddSeconds(slave.Template.PortalTime) > DateTime.UtcNow) continue;
+                            if (!_shipControllers.ContainsKey(slave.Id)) continue;
+                            ShipHarpoonRopeController.TickHarpoonRopeControllerLifetime(slave);
+                        }
+                        catch (Exception slaveException)
+                        {
+                            Logger.Error($"PhysicsThread Error on Slave {slave.Id} {slave.Name} ({slave.ObjId}): {slaveException.Message}\n{slaveException.StackTrace}");
+                        }
+                    }
+
+                    // Pass 3 : ApplyForceAndTorque
+                    foreach (var slave in shipsThisTick)
+                    {
+                        try { slave.ShipController?.ApplyForceAndTorque(slave, physicsTotalDelta); }
+                        catch (Exception ex) { Logger.Error($"PhysicsThread Error on Slave {slave.Id} {slave.Name} ({slave.ObjId}): {ex.Message}\n{ex.StackTrace}"); }
+                    }
+
+                    // Pass 4 : Ship-ship collisions
+                    try { _shipShip.ResolveAllPairs(shipsThisTick, physicsTotalDelta); }
+                    catch (Exception e) { Logger.Error($"PhysicsThread ship-ship resolve: {e.Message}\n{e.StackTrace}"); }
+
+                    // Pass 5 : Ship-doodad collisions
+                    try
+                    {
+                        foreach (var slave in shipsThisTick)
+                            slave.StaticObstacleHullDamageContactActive = false;
+                        _shipDoodad.ResolveAll(SimulationWorld, shipsThisTick, physicsTotalDelta);
+                    }
+                    catch (Exception e) { Logger.Error($"PhysicsThread ship-doodad resolve: {e.Message}\n{e.StackTrace}"); }
+
+                    // Pass 6 : Ship-static-barriers (BAI ingest + resolve)
+                    try
+                    {
+                        if (AppConfiguration.Instance.World.GeoDataMode && SimulationWorld.ShipStaticBarriers != null)
+                        {
+                            foreach (var slave in shipsThisTick)
+                            {
+                                if (slave.ParentWorld?.Id != SimulationWorld.Id || slave.RigidBody is null) continue;
+                                var p = slave.Transform.World.Position;
+                                var (cellX, cellY) = p.ToCellIndex();
+                                ShipStaticBarrierBaiIngestor.EnsureCell(SimulationWorld, cellX, cellY);
+                            }
+                            _shipStaticBarriers.ResolveAll(SimulationWorld, shipsThisTick, physicsTotalDelta);
+                        }
+                    }
+                    catch (Exception e) { Logger.Error($"PhysicsThread ship-static-barrier resolve: {e.Message}\n{e.StackTrace}"); }
+
+                    // Pass 7 : Ship-cliff
+                    try { _shipCliff.ResolveAll(SimulationWorld, shipsThisTick, physicsTotalDelta); }
+                    catch (Exception e) { Logger.Error($"PhysicsThread ship-cliff resolve: {e.Message}\n{e.StackTrace}"); }
+
+                    // Pass 8 : Ship harpoon tow impulses
+                    try { ShipHarpoonTowPhysics.ApplyShipPairHarpoonTowImpulses(shipsThisTick, (float)physicsTotalDelta.TotalSeconds); }
+                    catch (Exception e) { Logger.Error($"PhysicsThread ship-pair harpoon tow: {e.Message}\n{e.StackTrace}"); }
+
+                    // Pass 9 : Static obstacle hull damage tick
+                    foreach (var slave in shipsThisTick)
+                    {
+                        try { slave.TickStaticObstacleHullDamage(physicsTotalDelta); }
+                        catch (Exception ex) { Logger.Error($"PhysicsThread static-obstacle hull damage: {ex.Message}\n{ex.StackTrace}"); }
+                    }
+
+                    // Pass 10 : Debug tuning
+                    foreach (var slave in shipsThisTick)
+                    {
+                        try { ShipTuningDebug.TickShip(slave); }
+                        catch (Exception ex) { Logger.Debug(ex, $"ShipTuningDebug.TickShip failed for {slave.Name} ({slave.ObjId})"); }
+                    }
+
+                    // Pass 11 : SendUpdatedMovementData (final, after all interactions)
+                    foreach (var slave in shipsThisTick)
+                    {
+                        try { SendUpdatedMovementData(slave, slave.RigidBody, physicsTotalDelta); }
+                        catch (Exception ex) { Logger.Error($"PhysicsThread Error on Slave {slave.Id} {slave.Name} ({slave.ObjId}): {ex.Message}\n{ex.StackTrace}"); }
                     }
                 }
             }
