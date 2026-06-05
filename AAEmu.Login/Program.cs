@@ -2,10 +2,12 @@
 using System.Net;
 using System.Reflection;
 using AAEmu.Commons.IO;
+using AAEmu.Login.Core.Authentication;
 using AAEmu.Login.Core.Controllers;
 using AAEmu.Login.Core.Network.Internal;
 using AAEmu.Login.Core.Network.Login;
 using AAEmu.Login.Core.PacketHandlers;
+using AAEmu.Login.Core.Services;
 using AAEmu.Login.Models;
 using AAEmu.Login.Utils;
 using Microsoft.AspNetCore.Connections;
@@ -118,6 +120,9 @@ public static class Program
         builder.Services.AddSingleton<IGameController, GameController>();
         builder.Services.AddSingleton<ILoginController, LoginController>();
         builder.Services.AddSingleton<IRequestController, RequestController>();
+
+        builder.Services.AddPasswordAuth();
+        builder.Services.AddKoreaAuth();
 
         builder.Services.AddInternalNetwork();
         builder.Services.AddLoginNetwork();

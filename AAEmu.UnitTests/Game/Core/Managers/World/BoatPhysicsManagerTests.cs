@@ -142,8 +142,8 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         public void RemoveShip_WhenCalled_RemovesRigidBodyFromPhysicsWorld()
         {
             // Arrange
-            _boatPhysicsManager.PhysWorld = new Jitter2.World();
-            _boatPhysicsManager.Buoyancy = new Buoyancy(_boatPhysicsManager.PhysWorld);
+//            _boatPhysicsManager.PhysWorld = new Jitter2.World();
+//            _boatPhysicsManager.Buoyancy = new Buoyancy(_boatPhysicsManager.PhysWorld);
             //_boatPhysicsManager.SimulationWorld = _mockWorld.Object;
 
             _mockSlave.Setup(s => s.RigidBody).Returns(_mockRigidBody.Object);

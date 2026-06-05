@@ -1,6 +1,8 @@
+using AAEmu.Login.Core.Authentication;
 using AAEmu.Login.Core.Controllers;
 using AAEmu.Login.Core.Network.Connections;
 using AAEmu.Login.Core.Packets.C2L;
+using AAEmu.Login.Core.Services;
 
 namespace AAEmu.Login.Core.PacketHandlers.C2L;
 
@@ -11,8 +13,11 @@ namespace AAEmu.Login.Core.PacketHandlers.C2L;
 public class CARequestAuthMailRuPacketHandler(ILoginController loginController)
     : ILoginPacketHandler<CARequestAuthMailRuPacket>
 {
-    public async Task Execute(CARequestAuthMailRuPacket packet, LoginConnection connection)
+    public async Task Execute(CARequestAuthMailRuPacket packet, ILoginSession session,
+        CancellationToken cancellationToken)
     {
-        await loginController.Login(connection, packet.Id!, packet.Token);
+        var tokenHex = Convert.ToHexString(packet.Token!);
+        var flow = new PasswordAuthFlow(loginController, packet.Id!, Password.FromSha256Hex(tokenHex), session.Connection.Ip);
+        await session.AuthenticateAsync(flow, cancellationToken);
     }
 }
