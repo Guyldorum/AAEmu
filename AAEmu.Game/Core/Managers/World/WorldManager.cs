@@ -450,6 +450,9 @@ public class WorldManager(
         // Load water data
         // world.LoadWaterBodies();
 
+        // Initialize ship static barriers container (BAI ingest later when cells load)
+        world.InitShipStaticBarriers();
+
         // Create and start the actual physics engine
         world.StartPhysics();
 
