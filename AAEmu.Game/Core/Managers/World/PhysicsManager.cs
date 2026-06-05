@@ -63,6 +63,19 @@ public class PhysicsManager
     /// List of Ship controllers (slaveId, controller)
     /// </summary>
     private readonly Dictionary<uint, ShipController> _shipControllers = new();
+    // ===== Ship interactions + caches (added by lot 3A.6.1, consumed in 3A.6.3+) =====
+    private readonly ShipShoreInteraction _shipShore = new();
+    private readonly ShipShipInteraction _shipShip = new();
+    private readonly ShipDoodadInteraction _shipDoodad = new();
+    private readonly ShipStaticBarrierInteraction _shipStaticBarriers = new();
+    private readonly ShipCliffInteraction _shipCliff = new();
+
+    /// <summary>Physics-thread loop counter for throttling per-ship cache rebuilds.</summary>
+    private ulong _physicsLoopIndex;
+
+    /// <summary>Last loop index and XY at which water/terrain cache was rebuilt (per ship slave id).</summary>
+    private readonly Dictionary<uint, (ulong Loop, Vector2 Xy)> _waterLandCacheStamp = new();
+    // ===== end Ship interactions + caches =====
 
     private readonly ConcurrentQueue<Action> _pendingActions = new();
 
