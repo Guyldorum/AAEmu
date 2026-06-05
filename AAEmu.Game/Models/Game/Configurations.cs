@@ -11,6 +11,14 @@ public class Configurations : PacketMarshaler
 
 public class WorldConfig
 {
+    public enum WindModelType
+    {
+        /// <summary>Retail-like: wind only along N-S axis. 15 angle bonus for wind in the direction of the ship.</summary>
+        Official,
+        /// <summary>More realistic: wind direction rotates smoothly over the day.</summary>
+        Realistic
+    }
+
     /// <summary>
     /// Message of the Day that gets displayed in player's chat upon login
     /// </summary>
@@ -105,6 +113,11 @@ public class WorldConfig
     /// <summary>
     /// Server-side Actability Points multiplier (on top of buffs)
     /// </summary>
+    /// <summary>
+    /// Wind model used by ship physics. Default: <c>Official</c>.
+    /// </summary>
+    public WindModelType WindModel { get; set; } = WindModelType.Official;
+
     public double ActabilityRate { get; set; } = 1.0;
 }
 

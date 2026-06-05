@@ -390,7 +390,7 @@ public class PhysicsManager
         var rot = JQuaternion.CreateRotationY(slave.Transform.World.Rotation.Z);
         //                                     Width                   Length                  Height
         // var dimensions = new JVector(shipModel.MassBoxSizeX, shipModel.MassBoxSizeY, shipModel.MassBoxSizeZ);
-        var ctrl = new ShipController(PhysWorld, shipModel, waterLevel: DefaultWaterLevel);
+        var ctrl = new ShipController(PhysWorld, shipModel);
 
         ctrl.Build(initialPosition: pos, initialOrientation: rot);
 
