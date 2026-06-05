@@ -10,6 +10,7 @@ using AAEmu.Game.Models;
 using AAEmu.Game.Models.CryEngine;
 using AAEmu.Game.Models.CryEngine.Objects;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
+using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.Game.World;
@@ -606,6 +607,104 @@ public class PhysicsManager
     /// <summary>
     /// Enqueues an NPC body to be added in the next physics step.
     /// </summary>
+    // ===== Ship visual helpers (added by lot 3A.6.2, consumed in 3A.6.3+) =====
+    private static bool TryGetShipMassBoxWaterlineExtents(ShipModelV1 model, float scale,
+        out float length, out float beam, out float height, out float mass)
+    {
+        if (model == null)
+        {
+            length = beam = height = mass = 0f;
+            return false;
+        }
+
+        var s = MathF.Max(scale, 0.01f);
+        var hx = model.MassBoxSizeX * s;
+        var hy = model.MassBoxSizeY * s;
+        length = MathF.Max(MathF.Max(hx, hy), 0.25f);
+        beam = MathF.Max(MathF.Min(hx, hy), 0.25f);
+        height = MathF.Max(model.MassBoxSizeZ * s, 0.15f);
+        mass = MathF.Max(model.Mass, 10f);
+        return true;
+    }
+
+    /// <summary>
+    /// Visual wave pitch amplitude (rad) and angular frequency from hull length/mass.
+    /// Longer/heavier -> smaller amp, slightly slower cycle; short/light dinghies stay closer to legacy +/-3 deg / 0.06 Hz.
+    /// </summary>
+    private static void GetVisualWavePitchModelFactors(ShipModelV1 model, float scale, out float maxAmpRad, out float omega)
+    {
+        const float baseDeg = 3f;
+        const float baseHz = 0.06f;
+        if (!TryGetShipMassBoxWaterlineExtents(model, scale, out var length, out _, out _, out var mass))
+        {
+            maxAmpRad = baseDeg.DegToRad();
+            omega = 2f * MathF.PI * baseHz;
+            return;
+        }
+
+        const float refLength = 14f;
+        const float refMass = 85000f;
+
+        var lenRatio = Math.Clamp(refLength / length, 0.35f, 2.5f);
+        var massRatio = Math.Clamp(MathF.Sqrt(refMass / mass), 0.45f, 2.2f);
+        var ampMul = MathF.Pow(lenRatio, 0.38f) * MathF.Pow(massRatio, 0.28f);
+        var maxDeg = Math.Clamp(baseDeg * ampMul, 1.1f, 5.5f);
+        maxAmpRad = maxDeg.DegToRad();
+
+        var freqMul = MathF.Pow(Math.Clamp(length / refLength, 0.5f, 2.2f), -0.18f);
+        var hz = Math.Clamp(baseHz * freqMul, 0.042f, 0.078f);
+        omega = 2f * MathF.PI * hz;
+    }
+
+    /// <summary>
+    /// Visual-only pitch oscillation on open water. Does not affect rigid body.
+    /// </summary>
+    private static float ComputeVisualWavePitchOnWater(Slave slave, RigidBody rigidBody, float dt)
+    {
+        var grounded = slave.CachedFloorLevel > slave.CachedWaterSurface || slave.GroundContactLatched;
+        if (grounded)
+            return 0f;
+
+        var submerged = MathF.Max(0f, slave.CachedWaterSurface - rigidBody.Position.Y);
+        const float submergedForFullAmp = 0.32f;
+        var depthMul = Math.Clamp(submerged / submergedForFullAmp, 0f, 1f);
+        if (depthMul <= 0f)
+            return 0f;
+
+        GetVisualWavePitchModelFactors(slave.ShipController?.ShipModel, slave.Scale, out var maxAmpRad, out var omega);
+        slave.WavePitchPhase += omega * dt;
+        // keep phase bounded
+        if (slave.WavePitchPhase > MathF.PI * 4000f)
+            slave.WavePitchPhase -= MathF.PI * 4000f;
+
+        var phaseOff = (slave.ObjId & 511) * 0.211f;
+        return MathF.Sin(slave.WavePitchPhase + phaseOff) * maxAmpRad * depthMul;
+    }
+
+    /// <summary>
+    /// Max visual bank (degrees) for turn lean from ship_models mass box and mass.
+    /// </summary>
+    private static float ComputeVisualMaxBankDegFromShipModel(ShipModelV1 model, float scale)
+    {
+        if (!TryGetShipMassBoxWaterlineExtents(model, scale, out var length, out var beam, out var height, out var mass))
+            return 8f;
+
+        const float refLength = 14f;
+        const float refBeam = 1.5f;
+        const float refHeight = 16f;
+        const float refMass = 85000f;
+        const float baseDeg = 9f;
+
+        var lengthFactor = MathF.Pow(Math.Clamp(length / refLength, 0.35f, 2.8f), 0.22f);
+        var beamFactor = MathF.Pow(Math.Clamp(refBeam / beam, 0.65f, 1.6f), 0.28f);
+        var massFactor = MathF.Pow(Math.Clamp(refMass / mass, 0.2f, 4f), 0.18f);
+        var heightFactor = MathF.Pow(Math.Clamp(refHeight / height, 0.5f, 2f), 0.12f);
+
+        var deg = baseDeg * lengthFactor * beamFactor * massFactor * heightFactor;
+        return Math.Clamp(deg, 5f, 14f);
+    }
+    // ===== end Ship visual helpers =====
+
     private void EnqueueAddBody(RigidBody body)
     {
         if (body == null) return;
