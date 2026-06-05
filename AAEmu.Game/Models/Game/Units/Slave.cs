@@ -84,6 +84,7 @@ public class Slave : Unit
     public float StaticObstacleHullDamageSecondsAccumulator { get; set; }
     public float StaticObstacleHullDamageNoContactSeconds { get; set; }
     public Dictionary<uint, float> ShipHullCollisionDamageCooldownByOtherShipId { get; } = new();
+    public ShipHarpoonRopeState HarpoonRope;
     // ===== end Ship Physics state =====
 
     public Slave()
