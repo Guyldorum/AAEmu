@@ -447,55 +447,18 @@ public class PhysicsManager
         var shipModel = slave.ShipController?.ShipModel;
         if (shipModel == null) return;
 
-        // Calculate submerged depth and buoyancy force
-        var submergedDepth = Math.Max(0, slave.CachedWaterSurface - slave.RigidBody.Position.Y);
-        var isOnWater = submergedDepth > 0;
-        var isOnLand = !isOnWater && submergedDepth <= 0;
-
-        if (isOnLand)
-        {
-            // Apply ground friction and stop the ship
-            const float GroundFriction = 0.4f; // Sand: around 0.4
-            var frictionForce = new JVector(-slave.RigidBody.Velocity.X * GroundFriction, 0,
-                -slave.RigidBody.Velocity.Z * GroundFriction);
-            slave.RigidBody.AddForce(frictionForce);
-
-            // Gradually reduce speed
-            const float CollisionDamping = 0.5f;
-            slave.RigidBody.Velocity *= CollisionDamping;
-            slave.RigidBody.AngularVelocity *= CollisionDamping;
-
-            // Stop the ship and apply roll
-            if (slave.RigidBody.Velocity.Length() < 0.01f)
-            {
-                slave.RigidBody.Velocity = JVector.Zero;
-                slave.RigidBody.AngularVelocity = JVector.Zero;
-
-                // Apply roll to the ship
-                var rollAngle = GetRollAngle(JMatrix.CreateFromQuaternion(slave.RigidBody.Orientation));
-                if (Math.Abs(rollAngle) < 0.1f)
-                {
-                    var correctionTorque = new JVector(0, 0, -rollAngle * slave.RigidBody.Mass * 0.1f);
-                    slave.RigidBody.AddForce(correctionTorque);
-                }
-
-                // Disable control
-                slave.ThrottleRequest = 0;
-                slave.SteeringRequest = 0;
-                slave.Throttle = 0;
-                slave.Steering = 0;
-            }
-        }
+        _shipShore.ApplyOnLandPhysics(slave, deltaTime);
 
         // Check if the ship has a driver
         var hasDriver = slave.AttachedCharacters.ContainsKey(AttachPointKind.Driver);
         if (hasDriver)
         {
-            // If there is a driver, we update the control
-            // Smooth throttle and steering inputs
-            const float SmoothingFactor = 0.1f;
-            slave.Throttle = (sbyte)(slave.Throttle + (slave.ThrottleRequest - slave.Throttle) * SmoothingFactor);
-            slave.Steering = (sbyte)(slave.Steering + (slave.SteeringRequest - slave.Steering) * SmoothingFactor);
+            // Smooth toward client input in float space, then round - avoids sbyte stair-stepping on rudder animation.
+            const float SmoothingFactor = 0.12f;
+            slave.ThrottleSmoothed += (slave.ThrottleRequest - slave.ThrottleSmoothed) * SmoothingFactor;
+            slave.SteeringSmoothed += (slave.SteeringRequest - slave.SteeringSmoothed) * SmoothingFactor;
+            slave.Throttle = (sbyte)Math.Clamp((int)Math.Round(slave.ThrottleSmoothed), -128, 127);
+            slave.Steering = (sbyte)Math.Clamp((int)Math.Round(slave.SteeringSmoothed), -128, 127);
         }
         else
         {
@@ -504,6 +467,8 @@ public class PhysicsManager
             slave.SteeringRequest = 0;
             slave.Throttle = 0;
             slave.Steering = 0;
+            slave.ThrottleSmoothed = 0f;
+            slave.SteeringSmoothed = 0f;
         }
     }
 
