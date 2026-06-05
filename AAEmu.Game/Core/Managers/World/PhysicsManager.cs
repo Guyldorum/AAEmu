@@ -341,7 +341,7 @@ public class PhysicsManager
                                 CheckLandCollisions(slave, physicsTotalDelta);
                                 // Update Controls
                                 boat.ApplyForceAndTorque(slave, physicsTotalDelta);
-                                SendUpdatedMovementData(slave, slave.RigidBody);
+                                SendUpdatedMovementData(slave, slave.RigidBody, physicsTotalDelta);
                             }
                         }
                         catch (Exception slaveException)
@@ -477,43 +477,114 @@ public class PhysicsManager
     /// </summary>
     /// <param name="slave"></param>
     /// <param name="rigidBody"></param>
-    private void SendUpdatedMovementData(Slave slave, RigidBody rigidBody)
+    private void SendUpdatedMovementData(Slave slave, RigidBody rigidBody, TimeSpan deltaTime)
     {
         var moveType = (ShipMoveType)MoveType.GetType(MoveTypeEnum.Ship);
         moveType.UseSlaveBase(slave);
 
         // Get current rotation of the ship
         var rpy = PhysicsUtil.GetYawPitchRollFromMatrix(JMatrix.CreateFromQuaternion(rigidBody.Orientation));
-        // Insert new Rotation data into MoveType
-        var (rotZ, rotY, rotX) = MathUtil.GetSlaveRotationFromDegrees(rpy.Item1, rpy.Item2, rpy.Item3);
+
+        // Visual-only bank (ship leans into turns). Applied to replicated rotation, not physics.
+        var maxBankDeg = ComputeVisualMaxBankDegFromShipModel(slave.ShipController?.ShipModel, slave.Scale);
+        const float bankResponse = 7.5f;
+        var dt = Math.Max(0.0001f, (float)deltaTime.TotalSeconds);
+        var maxBankRad = maxBankDeg.DegToRad();
+        var yawRate = rigidBody.AngularVelocity.Y;
+        var horizSpeed = MathF.Sqrt(
+            rigidBody.Velocity.X * rigidBody.Velocity.X +
+            rigidBody.Velocity.Z * rigidBody.Velocity.Z);
+        var speedFactor = Math.Clamp(horizSpeed / 2.5f, 0f, 1f);
+        var targetBank = Math.Clamp(-yawRate * 0.9f, -maxBankRad, maxBankRad) * speedFactor;
+        var a = 1f - MathF.Exp(-bankResponse * dt);
+        slave.BankAngle += (targetBank - slave.BankAngle) * a;
+
+        _shipShore.UpdateVisualGroundPitch(slave, rigidBody, deltaTime);
+
+        var wavePitchRad = ComputeVisualWavePitchOnWater(slave, rigidBody, dt);
+
+        // Replication smoothing for clients only; rigid body and transform stay physics-accurate below.
+        const float repLambdaHorizFree = 22f;
+        const float repLambdaHorizContact = 11f;
+        const float repLambdaVertFree = 8f;
+        const float repLambdaVertContact = 4f;
+        const float repLambdaBankFree = 4f;
+        const float repLambdaBankContact = 2f;
+        var rep = slave.ShipController!.Replication;
+        var repLambdaH = rep.ContactHoldTicks > 0 ? repLambdaHorizContact : repLambdaHorizFree;
+        var repLambdaV = rep.ContactHoldTicks > 0 ? repLambdaVertContact : repLambdaVertFree;
+        var repLambdaB = rep.ContactHoldTicks > 0 ? repLambdaBankContact : repLambdaBankFree;
+        var repAlphaH = 1f - MathF.Exp(-repLambdaH * dt);
+        var repAlphaV = 1f - MathF.Exp(-repLambdaV * dt);
+        var repAlphaB = 1f - MathF.Exp(-repLambdaB * dt);
+
+        var tgtX = rigidBody.Position.X;
+        var tgtY = rigidBody.Position.Z;
+        var tgtZ = rigidBody.Position.Y;
+        var tgtVx = rigidBody.Velocity.X;
+        var tgtVy = rigidBody.Velocity.Z;
+        var tgtVz = rigidBody.Velocity.Y;
+
+        if (!rep.Seeded)
+        {
+            rep.PosX = tgtX;
+            rep.PosY = tgtY;
+            rep.PosZ = tgtZ;
+            rep.VelPx = tgtVx;
+            rep.VelPy = tgtVy;
+            rep.VelPz = tgtVz;
+            rep.BankSmoothed = slave.BankAngle;
+            rep.GroundPitchSmoothed = slave.GroundPitchAngle;
+            rep.Seeded = true;
+        }
+        else
+        {
+            rep.PosX += (tgtX - rep.PosX) * repAlphaH;
+            rep.PosY += (tgtY - rep.PosY) * repAlphaH;
+            rep.PosZ += (tgtZ - rep.PosZ) * repAlphaV;
+            rep.VelPx += (tgtVx - rep.VelPx) * repAlphaH;
+            rep.VelPy += (tgtVy - rep.VelPy) * repAlphaH;
+            rep.VelPz += (tgtVz - rep.VelPz) * repAlphaV;
+            rep.BankSmoothed += (slave.BankAngle - rep.BankSmoothed) * repAlphaB;
+            rep.GroundPitchSmoothed += (slave.GroundPitchAngle - rep.GroundPitchSmoothed) * repAlphaV;
+        }
+
+        var bankedRpy = (rpy.Item1, rpy.Item2 + rep.BankSmoothed, rpy.Item3 + rep.GroundPitchSmoothed + wavePitchRad);
+
+        var (rotZ, rotY, rotX) = MathUtil.GetSlaveRotationFromDegrees(bankedRpy.Item1, bankedRpy.Item2, bankedRpy.Item3);
         moveType.RotationX = rotX;
         moveType.RotationY = rotY;
         moveType.RotationZ = rotZ;
 
-        // Fill in the Velocity Data into the MoveType.
-        // moveType.Velocity = new Vector3(rigidBody.Velocity.X, rigidBody.Velocity.Z, rigidBody.Velocity.Y);
+        moveType.X = rep.PosX;
+        moveType.Y = rep.PosY;
+        moveType.Z = rep.PosZ;
+
         moveType.AngVelX = rigidBody.AngularVelocity.X;
         moveType.AngVelY = rigidBody.AngularVelocity.Z;
         moveType.AngVelZ = rigidBody.AngularVelocity.Y;
 
-        // Seems display the correct speed this way, but what happens if you go over the bounds ?
-        var velMultiplier = 2048; // 1024;
-        moveType.VelX = (short)(rigidBody.Velocity.X * velMultiplier);
-        moveType.VelY = (short)(rigidBody.Velocity.Z * velMultiplier);
-        moveType.VelZ = (short)(rigidBody.Velocity.Y * velMultiplier);
-
-        // Do not allow the body to flip
-        //slave.RigidBody.Orientation = JMatrix.CreateFromYawPitchRoll(rpy.Item1, 0, 0); // TODO: Fix me with proper physics
+        const int velMultiplier = 2048;
+        moveType.VelX = (short)(rep.VelPx * velMultiplier);
+        moveType.VelY = (short)(rep.VelPy * velMultiplier);
+        moveType.VelZ = (short)(rep.VelPz * velMultiplier);
 
         // Apply new Location/Rotation to GameObject
         slave.Transform.Local.SetPosition(rigidBody.Position.X, rigidBody.Position.Z, rigidBody.Position.Y);
         slave.Transform.Local.ApplyFromQuaternion(rigidBody.Orientation);
+        slave.Transform.Local.SetRotation(
+            slave.Transform.Local.Rotation.X,
+            slave.Transform.Local.Rotation.Y + rep.BankSmoothed,
+            slave.Transform.Local.Rotation.Z + rep.GroundPitchSmoothed + wavePitchRad);
 
         // Send the packet
         slave.BroadcastPacket(new SCOneUnitMovementPacket(slave.ObjId, moveType), false);
 
         // Update all to main Slave and it's children
         slave.Transform.FinalizeTransform();
+
+        if (rep.ContactHoldTicks > 0)
+            rep.ContactHoldTicks--;
     }
 
     /// <summary>
