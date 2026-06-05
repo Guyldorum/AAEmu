@@ -1,0 +1,111 @@
+﻿using System.Reflection;
+using AAEmu.Commons.Utils;
+using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Core.Managers.Id;
+using AAEmu.Game.Core.Managers.World;
+using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Items;
+using AAEmu.Game.Models.Game.Mails;
+using AAEmu.Game.Models.Game.Units;
+using AAEmu.UnitTests.Utils.Mocks;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using Xunit;
+
+namespace AAEmu.UnitTests.Game.Core.Managers;
+
+// avoid interference with NameManagerTests
+// don't let them run in parallel as they both manipulate the static NameManager's state
+[Collection("NameManager")] 
+public sealed class MailTests : IDisposable
+{
+    private CharacterMock _character;
+    private CharacterMails _mails;
+
+    public MailTests()
+    {
+        var modelParams = new UnitCustomModelParams();
+        _character = new CharacterMock();
+        _character.AccountId = 1;
+        _character.Id = 1;
+        _character.Name = "tester";
+        _character.Money = 1000;
+
+        _mails = new CharacterMails(_character);
+
+        NameManager.Instance.Load([], [], []);
+        NameManager.Instance.AddCharacter(_character.Id, _character.Name, 1);
+        MailIdManager.Instance.Initialize();
+
+        // Reset cached MailManager instance from any previous test
+        typeof(Singleton<MailManager>)
+            .GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic)
+            ?.SetValue(null, null);
+
+        // Create MailManager with real leaf deps + mocked non-critical deps
+        var mailManager = new MailManager(
+            MailIdManager.Instance,
+            NameManager.Instance,
+            Mock.Of<IItemManager>(),
+            Mock.Of<ITaskManager>(),
+            Mock.Of<IWorldManager>(),
+            new Lazy<IHousingManager>(() => Mock.Of<IHousingManager>()),
+            Mock.Of<ILocalizationManager>());
+
+        var services = new ServiceCollection();
+        services.AddSingleton(mailManager);
+        SingletonContainer.ServiceProvider = services.BuildServiceProvider();
+
+        MailManager.Instance._allPlayerMails = [];
+    }
+
+    public void Dispose()
+    {
+        NameManager.Instance.RemoveCharacterId(_character.Id);
+        MailManager.Instance._allPlayerMails = null;
+        _character = null;
+        _mails = null;
+
+        SingletonContainer.ServiceProvider = null;
+        typeof(Singleton<MailManager>)
+            .GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic)
+            ?.SetValue(null, null);
+    }
+
+    [Fact]
+    public void MoneyTest()
+    {
+        var type = MailType.Express;
+        var receiverCharName = "tester".NormalizeName();
+        var title = "test";
+        var text = "test";
+        var attachments = (byte)0;
+        var money0 = 500;
+        var money1 = 0;
+        var money2 = 0;
+        var extra = 0;
+        var itemSlots = new List<(SlotType slotType, byte slot)>();
+
+        Assert.Equal(MailResult.Success, _mails.SendMailToPlayer(type, receiverCharName, title, text, attachments, money0, money1, money2, extra, itemSlots));
+        Assert.Equal(400, _character.Money);
+    }
+
+    [Fact]
+    public void PlayerNotFoundTest()
+    {
+
+        var type = MailType.Express;
+        var receiverCharName = "bob";
+        var title = "test";
+        var text = "test";
+        var attachments = (byte)0;
+        var money0 = 500;
+        var money1 = 0;
+        var money2 = 0;
+        var extra = 0;
+        var itemSlots = new List<(SlotType slotType, byte slot)>();
+
+        Assert.NotEqual(MailResult.Success, _mails.SendMailToPlayer(type, receiverCharName, title, text, attachments, money0, money1, money2, extra, itemSlots));
+        Assert.Equal(1000, _character.Money);
+    }
+}

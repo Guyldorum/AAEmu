@@ -1,0 +1,653 @@
+﻿using System.Numerics;
+
+using AAEmu.Game.Models.CryEngine.Entities;
+using AAEmu.Game.Models.CryEngine.Loaders;
+using AAEmu.Game.Models.CryEngine.Mission;
+using AAEmu.Game.Models.CryEngine.Readers;
+using AAEmu.Game.Models.Game.AI.AStar;
+using AAEmu.Game.Models.Game.World;
+using AAEmu.Game.Utils;
+
+using NLog;
+
+#pragma warning disable IDE0079 // Remove unnecessary suppression
+
+namespace AAEmu.Game.Core.Managers;
+
+// GeoData AiNavigation
+public class AiGeoDataManager(WorldTemplate worldTemplate)
+{
+    private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+
+    public List<LinkDescriptor> GetAvailablePoints(NodeDescriptor point)
+    {
+        return point.NetMission?.LinkDescriptorList.Where(l => l.SourceNode == point.Id).ToList() ?? [];
+    }
+
+    #region A point in a polygon
+
+    /// <summary>
+    /// Checks if point is inside a forbidden zone area
+    /// </summary>
+    /// <param name="point"></param>
+    /// <returns></returns>
+    public bool CheckImpossibleWalk(Vector3 point)
+    {
+        var bai = worldTemplate.GetBaiByPos(point);
+        if (bai != null)
+        {
+            foreach (var areaMission in bai.AreasMissionReaders)
+            {
+                foreach (var forbiddenArea in areaMission.ForbiddenAreasList)
+                {
+                    if (IsInPolygon(point, forbiddenArea.Points))
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static bool IsInPolygon(Vector3 point, List<Vector3> polygon)
+    {
+        var result = false;
+        var a = polygon.Last();
+        foreach (var b in polygon)
+        {
+            if (b.X.Equals(point.X) && b.Y.Equals(point.Y))
+                return true;
+
+            if (b.Y.Equals(a.Y) && point.Y.Equals(a.Y))
+            {
+                if (a.X <= point.X && point.X <= b.X)
+                    return true;
+
+                if (b.X <= point.X && point.X <= a.X)
+                    return true;
+            }
+
+            if (b.Y < point.Y && a.Y >= point.Y || a.Y < point.Y && b.Y >= point.Y)
+            {
+                if (b.X + (point.Y - b.Y) / (a.Y - b.Y) * (a.X - b.X) <= point.X)
+                    result = !result;
+            }
+            a = b;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Get the center of the triangle (intersection of the medians)
+    /// </summary>
+    /// <param name="point1"></param>
+    /// <param name="point2"></param>
+    /// <param name="point3"></param>
+    /// <returns></returns>
+    public static Vector3 TriangleCenter(Vector3 point1, Vector3 point2, Vector3 point3)
+    {
+        var x = (point1.X + point2.X + point3.X) / 3;
+        var y = (point1.Y + point2.Y + point3.Y) / 3;
+        var z = (point1.Z + point2.Z + point3.Z) / 3;
+
+        return new Vector3(x, y, z);
+    }
+
+    #endregion A point in a polygon
+
+    #region Path smoothing
+
+    // https://www.codeproject.com/Articles/18936/A-C-Implementation-of-Douglas-Peucker-Line-Appro
+    public static List<Vector3> DouglasPeuckerReduction(List<Vector3> points, double tolerance)
+    {
+        if (points == null || points.Count < 3)
+            return points;
+
+        var firstPointIndex = 0;
+        var lastPointIndex = points.Count - 1;
+        var pointIndexesToKeep = new List<int>();
+
+        //The first and the last point cannot be the same
+        while (points[firstPointIndex].Equals(points[lastPointIndex]))
+        {
+            lastPointIndex--;
+        }
+
+        //Add the first and last index to the keepers
+        pointIndexesToKeep.Add(firstPointIndex);
+        pointIndexesToKeep.Add(lastPointIndex);
+
+        DouglasPeuckerReduction(points, firstPointIndex, lastPointIndex, tolerance, ref pointIndexesToKeep);
+
+        var returnPoints = new List<Vector3>();
+        pointIndexesToKeep.Sort();
+        foreach (var index in pointIndexesToKeep)
+        {
+            returnPoints.Add(points[index]);
+        }
+
+        return returnPoints;
+    }
+
+    /// <summary>
+    /// Douglas-Peucker reduction.
+    /// </summary>
+    /// <param name="points">The points.</param>
+    /// <param name="firstPointIndex">The first point.</param>
+    /// <param name="lastPointIndex">The last point.</param>
+    /// <param name="tolerance">The tolerance.</param>
+    /// <param name="pointIndexesToKeep">The point index to keep.</param>
+    private static void DouglasPeuckerReduction(List<Vector3> points, int firstPointIndex, int lastPointIndex, double tolerance, ref List<int> pointIndexesToKeep)
+    {
+        double maxDistance = 0;
+        var indexFarthest = 0;
+
+        if (lastPointIndex - firstPointIndex > 1) // ADDITION: need to have more than two points in the set we are looking through
+        {
+            for (var index = firstPointIndex; index < lastPointIndex; index++)
+            {
+                var distance = PerpendicularDistance(points[firstPointIndex], points[lastPointIndex], points[index]);
+                if (distance > maxDistance)
+                {
+                    maxDistance = distance;
+                    indexFarthest = index;
+                }
+            }
+
+            if (maxDistance > tolerance && indexFarthest != firstPointIndex) // CHANGE: condition was wrong.
+            {
+                //Add the largest point that exceeds the tolerance
+                pointIndexesToKeep.Add(indexFarthest);
+
+                DouglasPeuckerReduction(points, firstPointIndex, indexFarthest, tolerance, ref pointIndexesToKeep);
+                DouglasPeuckerReduction(points, indexFarthest, lastPointIndex, tolerance, ref pointIndexesToKeep);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The distance of a point from a line made from point1 and point2.
+    /// </summary>
+    /// <param name="point1">The point1.</param>
+    /// <param name="point2">The point2.</param>
+    /// <param name="targetPoint">The point.</param>
+    /// <returns></returns>
+    private static double PerpendicularDistance(Vector3 point1, Vector3 point2, Vector3 targetPoint)
+    {
+        // Area = |(1/2)(x1y2 + x2y3 + x3y1 - x2y1 - x3y2 - x1y3)|   *Area of triangle
+        // Base = v((x1-x2)²+(x1-x2)²)                               *Base of Triangle*
+        // Area = .5*Base*H                                          *Solve for height*
+        // Height = Area/.5/Base
+
+        var area = Math.Abs(.5 * (point1.X * point2.Y + point2.X * targetPoint.Y + targetPoint.X * point1.Y - point2.X * point1.Y - targetPoint.X * point2.Y - point1.X * targetPoint.Y));
+        var bottom = Math.Sqrt(Math.Pow(point1.X - point2.X, 2) + Math.Pow(point1.Y - point2.Y, 2));
+        var height = area / bottom * 2;
+
+        return height;
+    }
+
+    #endregion Path smoothing
+
+    #region Finding the closest point
+
+    public NodeDescriptor FindСlosestToTheCurrent(uint zoneKey, Vector3 pos, byte onlyNodeTypes)
+    {
+        NodeDescriptor closestPointFound = null;
+        var minDist = 99999.0f;
+        
+        var (sourceCellX, sourceCellY) = pos.ToCellIndex();
+        var cell = worldTemplate.GetCell(sourceCellX, sourceCellY);
+        if (cell == null)
+            return null;
+        
+        /*
+        var nearbyHeightMapPoints = worldTemplate.GetNearbyFloorHeightPoints(pos.X, pos.Y);
+        foreach (var v3 in nearbyHeightMapPoints)
+        {
+            var distance = (v3 - pos).Length();
+            if (distance < minDist)
+            {
+                closestPointFound = new NodeDescriptor(null) { Pos = v3, Type = 2 };
+                minDist = distance;
+            }
+        }
+        */
+
+        List<BaseBaiLoader> toCheckChunkList = [];
+        if (cell.Template.ZoneBaiLoader.Count > 0)
+        {
+            // If the zoneKey is actually the pre-defined one, then just use that
+            if (cell.Template.ZoneBaiLoader.TryGetValue(zoneKey, out var preDefined))
+            {
+                toCheckChunkList.Add(preDefined);
+            }
+            else
+            {
+                // Otherwise, check all of them
+                foreach (var (_, bai) in cell.Template.ZoneBaiLoader)
+                {
+                    toCheckChunkList.Add(bai);
+                }
+            }
+        }
+        else
+        {
+            // If no zone defined (main_world), the use the 4x4 chunk grid of the cell
+            foreach (var bai in cell.BaiLoader)
+            {
+                if (bai != null)
+                    toCheckChunkList.Add(bai);
+            }
+        }
+
+        // Check all eligible chunks
+        foreach (var bLoader in toCheckChunkList)
+        {
+            if (bLoader == null)
+                continue;
+            foreach (var netMission in bLoader.NetMissionReaders)
+            {
+                foreach (var (_, nodeDescriptor) in netMission.NodeDescriptorList)
+                {
+                    // Filter node types if needed
+                    // if (onlyNodeTypes > 0 && nodeDescriptor.Type != onlyNodeTypes)
+                    //    continue;
+                    var distance = (nodeDescriptor.Pos - pos).Length();
+                    if (distance < minDist)
+                    {
+                        closestPointFound = nodeDescriptor;
+                        minDist = distance;
+                    }
+                }
+            }
+        }
+
+        // Logger.Warn($"# Found near position index: {index}...");
+        return closestPointFound;
+    }
+
+    /// <summary>
+    /// Gets height using navmesh data using only type 4 node points
+    /// Falls back to regular heightmap if no points found and no maxDistanceAllowed is defined
+    /// </summary>
+    /// <param name="pos"></param>
+    /// <param name="defaultHeight"></param>
+    /// <param name="maxDistanceAllowed"></param>
+    /// <returns></returns>
+    public float GetHeight(Vector3 pos, float defaultHeight, float maxDistanceAllowed = float.MaxValue)
+    {
+        const float TargetTolerance = 0.1f;
+        float res;
+        //var stopWatch = new Stopwatch();
+        //stopWatch.Start();
+        //var rawFloorPos = pos with { Z = worldTemplate.GetHeight(pos.X, pos.Y) };
+        //var rawFloorDelta = pos.Z - rawFloorPos.Z;
+
+        // Try to get height from .bai files data
+        try
+        {
+            var closestPoint = Vector3.Zero;
+            var closestDistance = float.MaxValue;
+
+            var bai = worldTemplate.GetBaiByPos(pos);
+            if (bai != null)
+            {
+                if (bai.NetMissionReaders.Count > 0)
+                {
+                    foreach (var netMission in bai.NetMissionReaders)
+                    {
+                        foreach (var (_, nodeDescriptor) in netMission.NodeDescriptorList)
+                        {
+                            // Type 2 seems to be positions on the floor
+                            // Type 4 seems to represent "floating interior floors"
+                            if (nodeDescriptor.Type != 4) // ignore regular floor points  
+                                continue;
+                            //var floorDelta = worldTemplate.GetHeightMapHeight((int)MathF.Round(nodeDescriptor.Pos.X), (int)MathF.Round(nodeDescriptor.Pos.Y)) - nodeDescriptor.Pos.Z;
+                            //if (double.Abs(floorDelta) > rawFloorDelta)
+                            //    continue; // Ignore this point if it's further from the actual floor
+
+                            var dist = (nodeDescriptor.Pos - pos).Length();
+                            if (dist < closestDistance)
+                            {
+                                closestDistance = dist;
+                                closestPoint = nodeDescriptor.Pos;
+                                // Slightly optimize if very close to target point
+                                if (closestDistance < TargetTolerance)
+                                {
+                                    return closestPoint.Z;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If we defined a max range, compare to that
+            if (closestDistance < float.MaxValue)
+            {
+                // Check if it's outside the allowed range.
+                // Return zero if we had a max distance defined
+                return closestDistance > maxDistanceAllowed ? 0f : closestPoint.Z;
+            }
+
+            // If no point found, fall back to regular heightmap
+            // Now compare to heightmap data
+            if (closestDistance >= float.MaxValue) 
+            {
+                // Fall back to raw heightmap data
+                closestPoint = pos with { Z = worldTemplate.GetHeightMapHeight((int)MathF.Round(pos.X), (int)MathF.Round(pos.Y)) };
+            }
+
+            return closestPoint.Z;
+        }
+        catch
+        {
+            res = defaultHeight;
+        }
+        //stopWatch.Stop();
+        //Logger.Info($"GetHeight took {stopWatch.Elapsed}");
+
+        return res;
+    }
+
+    private static float DistanceBetweenPoints(Vector3 point, Vector3 compareTo)
+    {
+        return (compareTo.X - point.X) * (compareTo.X - point.X) +
+               (compareTo.Y - point.Y) * (compareTo.Y - point.Y);
+    }
+
+/*    
+    private static Vector3 FindClosest(List<AiNavigation> searchIn, Vector3 compareTo)
+    {
+        return searchIn
+            .Select(p => new { point = p.Position, distance = DistanceBetweenPoints(p.Position, compareTo) })
+            .OrderBy(distances => distances.distance)
+            .First().point;
+    }
+
+    private static Vector3 FindClosest(List<Vector3> searchIn, Vector3 compareTo)
+    {
+        return searchIn
+            .Select(p => new { point = p, distance = DistanceBetweenPoints(p, compareTo) })
+            .OrderBy(distances => distances.distance)
+            .First().point;
+    }
+*/
+
+    /// <summary>
+    /// Find the nearest point
+    /// </summary>
+    /// <param name="searchIn"></param>
+    /// <param name="compareTo"></param>
+    /// <returns>returns the index of the found point</returns>
+    public static uint FindClosestIndexPoint(List<Vector3> searchIn, Vector3 compareTo)
+    {
+        var minDistance = 0f;
+        var pointN = 0u;
+
+        for (var i = 0; i < searchIn.Count; i++)
+        {
+            var distance = DistanceBetweenPoints(searchIn[i], compareTo);
+            if (distance > minDistance)
+                continue;
+
+            pointN = (uint)i;
+            minDistance = distance;
+        }
+
+        return pointN;
+    }
+
+    #endregion Finding the closest point
+
+    public void Load()
+    {
+        // Nothing to load here anymore, everything has been move to cell loader
+    }
+
+    public Queue<Vector3> ReducePath(List<Vector3> foundPath, int maxNodeSkipCount)
+    {
+        var res = new Queue<Vector3>();
+        // Check for all node
+        for (var startNodeIndex = 0; startNodeIndex < foundPath.Count; startNodeIndex++)
+        {
+            var startNode = foundPath[startNodeIndex];
+            res.Enqueue(startNode);
+
+            // Check nodes further in the path, starting at the furthest node defined by max skip (and getting closer with each loop)
+            for (var endNodeIndex = startNodeIndex + maxNodeSkipCount; endNodeIndex > startNodeIndex; endNodeIndex--)
+            {
+                // Check if still in total range
+                if (endNodeIndex >= foundPath.Count)
+                    continue;
+                var endNode = foundPath[endNodeIndex];
+                // Skip this node if the height offset is too much
+                //var delta = endNode - startNode;
+                //var angleRate = delta.Length() > 0 ? delta.Z / delta.Length() : 0f;
+                // TODO: Temporary disabled angle check
+                //if (angleRate >= 0.2f || angleRate <= -0.5f)
+                //    continue;
+                // Check if there's a direct line between the two nodes that is allowed
+                if (LinePassesThroughForbiddenArea(startNode, endNode, [], true, out _, out _, out _, 10f) == false)
+                {
+                    // If clear, directly put this point as next, and move the check index
+                    res.Enqueue(endNode);
+                    startNodeIndex = endNodeIndex;
+                    break;
+                }
+            }
+        }
+
+        return res;
+    }
+
+    /// <summary>
+    /// Checks if a line passes through at least one of the edges of a AiShape
+    /// </summary>
+    /// <param name="startPos"></param>
+    /// <param name="endPos"></param>
+    /// <param name="shape"></param>
+    /// <param name="closedLoop">Is the shape a closed loop</param>
+    /// <param name="maxHeightOffset">Maximum height difference required for the intersection to count as valid</param>
+    /// <param name="ignoreCorners"></param>
+    /// <param name="intersectionPoint">Returns the closest intersection point in this shape to startPos</param>
+    /// <param name="intersectionPointStartIndex">Returns the point index of the line segment that intersectionPoint or -1 if nothing was found</param>
+    /// <returns>Returns true if at least one intersection happened</returns>
+    private static bool LinePassesThroughAiShape(Vector3 startPos, Vector3 endPos, AiShape shape, bool closedLoop, float maxHeightOffset, bool ignoreCorners, out Vector3 intersectionPoint, out int intersectionPointStartIndex)
+    {
+        intersectionPoint =  Vector3.Zero;
+        intersectionPointStartIndex = -1;
+        var maxIndexToStart = shape.Points.Count + (closedLoop ? 0 : -1);
+
+        for (var index = 0; index < maxIndexToStart; index++)
+        {
+            var lineStart = shape.Points[index];
+            var lineEnd = index < maxIndexToStart-1 ? shape.Points[index + 1] : shape.Points[0];
+            if (ignoreCorners && (
+                    Vector3.Distance(startPos, lineStart) <= 0.01f ||
+                    Vector3.Distance(startPos, lineEnd) <= 0.01f ||
+                    Vector3.Distance(endPos, lineStart) <= 0.01f ||
+                    Vector3.Distance(endPos, lineEnd) <= 0.01f))
+            {
+                continue;
+            }
+
+            var iPoint = FindLineIntersection(startPos, endPos, lineStart, lineEnd); 
+            if (iPoint != Vector3.Zero)
+            {
+                // Check for height difference if wanted
+                if (maxHeightOffset == 0f || MathF.Abs(iPoint.Z - startPos.Z) <= maxHeightOffset || MathF.Abs(iPoint.Z - endPos.Z) <= maxHeightOffset)
+                {
+                    // If first match or a closer match to starting point, then update the point and index  
+                    if (intersectionPointStartIndex < 0 || Vector3.Distance(startPos, iPoint) > Vector3.Distance(intersectionPoint, iPoint))
+                    {
+                        intersectionPoint = iPoint;
+                        intersectionPointStartIndex = index;
+                    }
+                }
+            }
+        }
+
+        return (intersectionPointStartIndex >= 0);
+    }
+
+    /// <summary>
+    /// Check if a given line passes any of the defined ForbiddenAreas nearby (in 2D space)
+    /// </summary>
+    /// <param name="startNode"></param>
+    /// <param name="endNode"></param>
+    /// <param name="ignoredShapeNames"></param>
+    /// <param name="ignoreCorners"></param>
+    /// <param name="intersectionShape"></param>
+    /// <param name="intersectionPoint"></param>
+    /// <param name="intersectionLinePointStartIndex"></param>
+    /// <param name="maxHeightOffset">if set to 0f it ignores height differences</param>
+    /// <returns></returns>
+    public bool LinePassesThroughForbiddenArea(Vector3 startNode, Vector3 endNode, List<string> ignoredShapeNames, bool ignoreCorners, out AiShape intersectionShape, out Vector3 intersectionPoint, out int intersectionLinePointStartIndex, float maxHeightOffset = 8f)
+    {
+        // It should be enough to grab the starting node's bai data. Forbidden zones are defined if even part of the zone falls within the area
+        intersectionPoint = Vector3.Zero;
+        intersectionLinePointStartIndex = -1;
+        var intersectionPointDistance = float.PositiveInfinity;
+        intersectionShape = null;
+        var sourceBai = worldTemplate.GetBaiByPos(startNode);
+        //var endBai = worldTemplate.GetBaiByPos(endNode);
+        var areaReaders = new List<AreasMissionReader>();
+        areaReaders.AddRange(sourceBai.AreasMissionReaders);
+        /*
+        if (endBai != null && endBai != sourceBai)
+        {
+            areaReaders.AddRange(endBai.AreasMissionReaders);
+        }
+        */
+
+        foreach (var areaMission in areaReaders)
+        {
+            // Loop forbidden areas shape
+            foreach (var aiShape in areaMission.ForbiddenAreasList)
+            {
+                if (ignoredShapeNames.Contains(aiShape.Name))
+                {
+                    continue;
+                }
+                if (LinePassesThroughAiShape(startNode, endNode, aiShape, true, maxHeightOffset, ignoreCorners, out var hitTest, out var hitIndex))
+                {
+                    var hitDistance = Vector3.Distance(startNode, hitTest);
+                    if (intersectionLinePointStartIndex < 0 || hitDistance < intersectionPointDistance)
+                    {
+                        intersectionShape = aiShape;
+                        intersectionPoint = hitTest;
+                        intersectionLinePointStartIndex = hitIndex;
+                        intersectionPointDistance = hitDistance;
+                    }
+                    // return true;
+                }
+            }
+
+            /*
+            foreach (var aiShape in areaMission.ForbiddenBoundariesList)
+            {
+                if (ignoredShapeNames.Contains(aiShape.Name))
+                {
+                    continue;
+                }
+                if (LinePassesThroughAiShape(startNode, endNode, aiShape, true, maxHeightOffset, out var hitTest, out var hitIndex))
+                {
+                    var hitDistance = Vector3.Distance(startNode, hitTest);
+                    if (intersectionLinePointStartIndex < 0 || hitDistance < intersectionPointDistance)
+                    {
+                        intersectionShape = aiShape;
+                        intersectionPoint = hitTest;
+                        intersectionLinePointStartIndex = hitIndex;
+                        intersectionPointDistance = hitDistance;
+                    }
+                    // return true;
+                }
+            }
+
+            foreach (var aiShape in areaMission.DesignerForbiddenAreasList)
+            {
+                if (ignoredShapeNames.Contains(aiShape.Name))
+                {
+                    continue;
+                }
+                if (LinePassesThroughAiShape(startNode, endNode, aiShape, true, maxHeightOffset, out var hitTest, out var hitIndex))
+                {
+                    var hitDistance = Vector3.Distance(startNode, hitTest);
+                    if (intersectionLinePointStartIndex < 0 || hitDistance < intersectionPointDistance)
+                    {
+                        intersectionShape = aiShape;
+                        intersectionPoint = hitTest;
+                        intersectionLinePointStartIndex = hitIndex;
+                        intersectionPointDistance = hitDistance;
+                    }
+                    // return true;
+                }
+            }
+            */
+        }
+
+        if (intersectionLinePointStartIndex >= 0 && intersectionShape != null)
+        {
+            return true;
+        }
+
+        intersectionShape = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if two lines intersect with given starting and ending point in 2D space (Z is ignored here)
+    /// </summary>
+    /// <param name="start1"></param>
+    /// <param name="end1"></param>
+    /// <param name="start2"></param>
+    /// <param name="end2"></param>
+    /// <returns>Returns the intersection point of line 1 in 2D space, or Zero if none was found</returns>
+    /// <remarks>Based on the answer of https://stackoverflow.com/questions/1119451/how-to-tell-if-a-line-intersects-a-polygon-in-c#1120126</remarks>
+    private static Vector3 FindLineIntersection(Vector3 start1, Vector3 end1, Vector3 start2, Vector3 end2)
+    {
+        var denominator = (end1.X - start1.X) * (end2.Y - start2.Y) - (end1.Y - start1.Y) * (end2.X - start2.X);
+
+        // AB & CD are parallel 
+        if (denominator == 0)
+            return Vector3.Zero;
+
+        var numerator1 = (start1.Y - start2.Y) * (end2.X - start2.X) - (start1.X - start2.X) * (end2.Y - start2.Y);
+        var r = numerator1 / denominator;
+        var numerator2 = (start1.Y - start2.Y) * (end1.X - start1.X) - (start1.X - start2.X) * (end1.Y - start1.Y);
+        var s = numerator2 / denominator;
+
+        if (r < 0 || r > 1 || s < 0 || s > 1)
+            return Vector3.Zero;
+
+        // Find intersection point
+        return new Vector3(start1.X + r * (end1.X - start1.X), start1.Y + r * (end1.Y - start1.Y), start1.Z + r * (end1.Z - start1.Z));
+    }
+
+    /// <summary>
+    /// Changes Z positions if they are above the floor
+    /// </summary>
+    /// <param name="pointsList"></param>
+    /// <returns></returns>
+    public List<Vector3> StickToFloor(List<Vector3> pointsList)
+    {
+        var res = new List<Vector3>();
+        foreach (var point in pointsList)
+        {
+            var floor = worldTemplate.GetHeight(point.X, point.Y);
+            if (floor < point.Z)
+                res.Add(point with { Z = floor });
+            else
+                res.Add(point);
+        }
+        return res;
+    }
+
+    public Vector3 StickToFloor(Vector3 point)
+    {
+        var floor = worldTemplate.GetHeight(point.X, point.Y);
+        if (floor < point.Z)
+            return point with { Z = floor };
+        return point;
+    }
+}
