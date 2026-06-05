@@ -486,6 +486,17 @@ public class PhysicsManager
         slave.RigidBody.Tag = slave;
         slave.ShipController = ctrl;
 
+        // [DEV-added] Initial state setup : during PortalTime the physics thread skips ship processing
+        // (including transform sync), so ensure the initial server-side Transform matches the physics spawn position.
+        SyncTransformWithRigidBody(slave);
+        slave.Transform.FinalizeTransform();
+        ctrl.Replication.Reset();
+        slave.WavePitchPhase = 0f;
+        slave.ShipHullCollisionDamageCooldownByOtherShipId.Clear();
+        slave.StaticObstacleHullDamageContactActive = false;
+        slave.StaticObstacleHullDamageSecondsAccumulator = 0f;
+        slave.StaticObstacleHullDamageNoContactSeconds = 0f;
+
         EnqueueAddBody(slave.RigidBody);
         Buoyancy.AddForRectangularParallelepiped(slave.RigidBody, 3);
 
@@ -498,14 +509,40 @@ public class PhysicsManager
     /// <param name="slave"></param>
     public void RemoveShip(Slave slave)
     {
-        if (slave.RigidBody == null) return;
+        if (slave.RigidBody == null)
+            return;
 
         var rigidBody = slave.RigidBody;
-        rigidBody.SetActivationState(false);
-        EnqueueRemoveBody(rigidBody);
-        PhysWorld.Remove(rigidBody);
-        Buoyancy.Remove(rigidBody);
-        slave.RigidBody = null;
+        var slaveId = slave.Id;
+        var slaveRef = slave;
+
+        void RemoveFromPhysicsThread()
+        {
+            // Second queued removal (same body): first lambda already nulled RigidBody.
+            if (slaveRef.RigidBody != rigidBody)
+                return;
+
+            rigidBody.SetActivationState(false);
+            PhysWorld.Remove(rigidBody);
+            Buoyancy.Remove(rigidBody);
+            _bodies.Remove(rigidBody);
+            _shipControllers.Remove(slaveId, out _);
+            _waterLandCacheStamp.Remove(slaveId);
+
+            ShipTuningDebug.DespawnAll(slaveId);
+
+            slaveRef.RigidBody = null;
+            slaveRef.ShipController = null;
+        }
+
+        if (!ThreadRunning)
+        {
+            RemoveFromPhysicsThread();
+        }
+        else
+        {
+            _pendingActions.Enqueue(RemoveFromPhysicsThread);
+        }
 
         Logger.Debug($"RemoveShip {slave.Name} <- {SimulationWorld.Template.Name}");
     }
