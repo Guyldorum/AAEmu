@@ -10,6 +10,8 @@ using AAEmu.Game.Utils;
 
 using NLog;
 
+using AAEmu.Game.Models;
+using AAEmu.Game.Models.Game;
 #pragma warning disable IDE0079 // Remove unnecessary suppression
 
 namespace AAEmu.Game.Core.Managers;
@@ -275,14 +277,92 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
     /// <returns></returns>
     public float GetHeight(Vector3 pos, float defaultHeight, float maxDistanceAllowed = float.MaxValue)
     {
+        // V6.1 (heightmap-first arbitrage with .bai) when flag set (defaut true).
+        // Sinon, fallback sur la logique HM historique (filtre Type 4 seulement).
+        var cfg = AppConfiguration.Instance.World?.SpawnHeight;
+        if (cfg?.PreferHeightmapForGroundZ ?? true)
+        {
+            try
+            {
+                return GetHeightV6(pos, defaultHeight, maxDistanceAllowed, cfg);
+            }
+            catch
+            {
+                return defaultHeight;
+            }
+        }
+        return GetHeightHmLegacy(pos, defaultHeight, maxDistanceAllowed);
+    }
+
+    /// <summary>
+    /// V6.1 heightmap-first arbitrage. Compare le node .bai le plus proche en XY (via
+    /// GetHeightDetailed) avec le heightmap interpole bilineaire (via worldTemplate.GetHeight(x,y)).
+    /// - Si bai loin en XY ou hmap+bai s'accordent : heightmap (anti-levitation).
+    /// - Si bai et hmap divergent : bai (structure : pont, cave, donjon).
+    /// - Si NPC est au-dessus de hmap+bai (unmeshed structure) : keep pos.Z.
+    /// </summary>
+    private float GetHeightV6(Vector3 pos, float defaultHeight, float maxDistanceAllowed, SpawnHeightConfig cfg)
+    {
+        // maxDistanceAllowed (param caller) override le seuil config si plus strict
+        var maxXy = MathF.Min(maxDistanceAllowed, cfg?.MaxBaiDistance2D ?? 6.0f);
+        var maxBaiVsHmap = cfg?.MaxBaiVsHeightmapDelta ?? 3.0f;
+        var unmeshedThr = cfg?.UnmeshedStructureThreshold ?? 1.5f;
+
+        var lookup = GetHeightDetailed(pos);
+
+        // Heightmap interpole bilineaire avec fallback raw-pixel en cas d'erreur
+        float HmapInterp()
+        {
+            try { return worldTemplate.GetHeight(pos.X, pos.Y); }
+            catch { return worldTemplate.GetHeightMapHeight((int)MathF.Round(pos.X), (int)MathF.Round(pos.Y)); }
+        }
+
+        if (!lookup.HasValue)
+            return HmapInterp();
+
+        if (lookup.Distance2D > maxXy)
+        {
+            // .bai trop loin en XY ; fallback heightmap interpole
+            return HmapInterp();
+        }
+
+        // .bai assez proche en XY. Calcul heightmap.
+        var hmapZ = HmapInterp();
+        var hmapValid = !float.IsNaN(hmapZ) && !float.IsInfinity(hmapZ);
+
+        if (hmapValid)
+        {
+            var hmapBaiAgree = MathF.Abs(lookup.BaiZ - hmapZ) <= maxBaiVsHmap;
+            var highestFloor = MathF.Max(lookup.BaiZ, hmapZ);
+
+            // Unmeshed structure (pier, dock, low platform) : NPC au-dessus de hmap+bai
+            // accordes. Retourner un sol tirerait le NPC a travers la structure.
+            if (hmapBaiAgree && (pos.Z - highestFloor) > unmeshedThr)
+                return pos.Z;
+
+            // Anti-levitation : bai et hmap s'accordent -> heightmap (le bai navmesh
+            // flotte +1.89m moyen au-dessus du sol).
+            if (hmapBaiAgree)
+                return hmapZ;
+
+            // Bai diverge du hmap : c'est une vraie structure surelevee (pont, cave,
+            // sol de donjon). Trust bai.
+            return lookup.BaiZ;
+        }
+
+        // Pas de hmap valide (cellule non chargee, mer, etc.) -> bai
+        return lookup.BaiZ;
+    }
+
+    /// <summary>
+    /// Comportement HM historique : ne considere que les nodes .bai Type 4 (sols
+    /// interieurs flottants), ignore Type 2 (sols normaux). Fallback heightmap raw pixel.
+    /// Garde pour A/B test via SpawnHeight.PreferHeightmapForGroundZ=false.
+    /// </summary>
+    private float GetHeightHmLegacy(Vector3 pos, float defaultHeight, float maxDistanceAllowed)
+    {
         const float TargetTolerance = 0.1f;
         float res;
-        //var stopWatch = new Stopwatch();
-        //stopWatch.Start();
-        //var rawFloorPos = pos with { Z = worldTemplate.GetHeight(pos.X, pos.Y) };
-        //var rawFloorDelta = pos.Z - rawFloorPos.Z;
-
-        // Try to get height from .bai files data
         try
         {
             var closestPoint = Vector3.Zero;
@@ -299,11 +379,8 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
                         {
                             // Type 2 seems to be positions on the floor
                             // Type 4 seems to represent "floating interior floors"
-                            if (nodeDescriptor.Type != 4) // ignore regular floor points  
+                            if (nodeDescriptor.Type != 4) // ignore regular floor points
                                 continue;
-                            //var floorDelta = worldTemplate.GetHeightMapHeight((int)MathF.Round(nodeDescriptor.Pos.X), (int)MathF.Round(nodeDescriptor.Pos.Y)) - nodeDescriptor.Pos.Z;
-                            //if (double.Abs(floorDelta) > rawFloorDelta)
-                            //    continue; // Ignore this point if it's further from the actual floor
 
                             var dist = (nodeDescriptor.Pos - pos).Length();
                             if (dist < closestDistance)
@@ -324,16 +401,12 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
             // If we defined a max range, compare to that
             if (closestDistance < float.MaxValue)
             {
-                // Check if it's outside the allowed range.
-                // Return zero if we had a max distance defined
                 return closestDistance > maxDistanceAllowed ? 0f : closestPoint.Z;
             }
 
             // If no point found, fall back to regular heightmap
-            // Now compare to heightmap data
-            if (closestDistance >= float.MaxValue) 
+            if (closestDistance >= float.MaxValue)
             {
-                // Fall back to raw heightmap data
                 closestPoint = pos with { Z = worldTemplate.GetHeightMapHeight((int)MathF.Round(pos.X), (int)MathF.Round(pos.Y)) };
             }
 
@@ -343,11 +416,119 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
         {
             res = defaultHeight;
         }
-        //stopWatch.Stop();
-        //Logger.Info($"GetHeight took {stopWatch.Elapsed}");
-
         return res;
     }
+
+    /// <summary>
+    /// Lookup XY-based qui retourne aussi le contexte (distance, deltaZ, type node).
+    /// Le caller decide si le node est trustworthy pour snapper a un sol.
+    /// Ne throw jamais : en cas d'erreur ou no-data, HasValue=false dans le retour.
+    /// </summary>
+    public BaiHeightLookup GetHeightDetailed(Vector3 pos)
+    {
+        try
+        {
+            var bai = worldTemplate.GetBaiByPos(pos);
+            if (bai == null)
+                return default;
+
+            var bestZ = 0f;
+            var bestDist2D = float.MaxValue;
+            var bestDeltaZ = 0f;
+            var bestType = (byte)255;
+            var bestSource = string.Empty;
+            // Slack pour "meme empreinte XY" : dans ce ring, on prefere le node dont
+            // le Z est le plus proche de pos.Z, pour qu'un node sol gagne contre un
+            // node balcon au-dessus de lui.
+            const float SameFootprintSlack = 1.5f;
+
+            if (bai.NetMissionReaders.Count > 0)
+            {
+                foreach (var netMission in bai.NetMissionReaders)
+                {
+                    foreach (var (_, nd) in netMission.NodeDescriptorList)
+                    {
+                        var dx = nd.Pos.X - pos.X;
+                        var dy = nd.Pos.Y - pos.Y;
+                        var d2 = MathF.Sqrt(dx * dx + dy * dy);
+                        var dz = MathF.Abs(nd.Pos.Z - pos.Z);
+
+                        // Tier 1 : strictement plus proche en XY -> gagne toujours.
+                        // Tier 2 : meme empreinte XY (petit ring) -> prefere plus proche en Z.
+                        var wins = d2 < bestDist2D - 1e-3f
+                                   || (d2 <= bestDist2D + SameFootprintSlack
+                                       && bestDist2D <= d2 + SameFootprintSlack
+                                       && dz < bestDeltaZ);
+
+                        if (wins)
+                        {
+                            bestDist2D = d2;
+                            bestZ = nd.Pos.Z;
+                            bestDeltaZ = dz;
+                            bestType = nd.Type;
+                            bestSource = "NetMission";
+
+                            if (d2 < 0.01f && dz < 0.5f)
+                            {
+                                return new BaiHeightLookup
+                                {
+                                    HasValue = true,
+                                    BaiZ = bestZ,
+                                    Distance2D = bestDist2D,
+                                    DeltaZ = nd.Pos.Z - pos.Z,
+                                    NodeType = bestType,
+                                    Source = bestSource,
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Note : VertexMissionReaders est private en HM (BaseBaiLoader.cs HM-specific),
+            // contrairement a DEV ou V6.1 le consultait. Pas grave : ces nodes sont des
+            // obstacles, pas du navmesh - leur info Z n'est pas fiable pour le sol.
+            // NetMissionReaders couvre tout ce qu'il faut pour la resolution Z.
+
+            if (bestDist2D >= float.MaxValue)
+                return default;
+
+            return new BaiHeightLookup
+            {
+                HasValue = true,
+                BaiZ = bestZ,
+                Distance2D = bestDist2D,
+                DeltaZ = bestZ - pos.Z,
+                NodeType = bestType,
+                Source = bestSource,
+            };
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
+    /// <summary>
+    /// Resultat d'un lookup .bai detaille. Utilise par le pipeline de spawn pour
+    /// arbitrer entre heightmap et navmesh sans perdre le contexte.
+    /// </summary>
+    public readonly struct BaiHeightLookup
+    {
+        /// <summary>True si au moins un node .bai trouve.</summary>
+        public bool HasValue { get; init; }
+        /// <summary>Z du node gagnant.</summary>
+        public float BaiZ { get; init; }
+        /// <summary>Distance XY (m) entre query point et node gagnant.</summary>
+        public float Distance2D { get; init; }
+        /// <summary>Delta Z signe (node.Z - pos.Z).</summary>
+        public float DeltaZ { get; init; }
+        /// <summary>Type byte du node gagnant. 255 si Vertex.</summary>
+        public byte NodeType { get; init; }
+        /// <summary>"NetMission" ou "Vertex" ou "".</summary>
+        public string Source { get; init; }
+    }
+
 
     private static float DistanceBetweenPoints(Vector3 point, Vector3 compareTo)
     {
