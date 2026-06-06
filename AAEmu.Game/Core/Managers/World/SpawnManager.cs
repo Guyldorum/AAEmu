@@ -94,6 +94,13 @@ public class SpawnManager(WorldInstance parentWorld)
                     NpcGameData.Instance.AddMemberAndSpawnerTemplateIds(tmpNpc);
                     NpcGameData.Instance.AddNpcSpawner(npcSpawner.Template);
                     _fakeSpawnerId++;
+
+                    // Phase 4A2 fix : sans ces 2 lignes la branche FAKE configurait
+                    // npcSpawner mais ne le poussait jamais dans la liste locale,
+                    // et _nextId ne bougeait pas -> _npcSpawners.TryAdd echouait
+                    // silencieusement sur les appels consecutifs (meme cle).
+                    spawners.Add(npcSpawner);
+                    _nextId++;
                 }
                 else
                 {
@@ -117,7 +124,8 @@ public class SpawnManager(WorldInstance parentWorld)
                     }
                 }
 
-                _npcSpawners.TryAdd(_nextId, spawners);
+                var phase4Added = _npcSpawners.TryAdd(_nextId, spawners);
+                Logger.Trace($"[Phase4Diag2] _npcSpawners.TryAdd key={_nextId} added={phase4Added} spawners.Count={spawners.Count} dictCount={_npcSpawners.Count}");
             }
             else
             {
