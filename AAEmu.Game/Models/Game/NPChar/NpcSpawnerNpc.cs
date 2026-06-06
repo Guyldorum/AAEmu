@@ -6,6 +6,8 @@ using AAEmu.Game.Models.Game.World;
 
 using NLog;
 
+using AAEmu.Game.Models;
+using AAEmu.Game.Models.Game;
 namespace AAEmu.Game.Models.Game.NPChar;
 
 public class NpcSpawnerNpc : Spawner<Npc>
@@ -69,11 +71,7 @@ public class NpcSpawnerNpc : Spawner<Npc>
 
         if (!npc.CanFly)
         {
-            var newZ = npcSpawner.ParentWorld.GetHeight(npcSpawner.Position.AsPositionVector());// WorldManager.Instance.GetHeight(npcSpawner.Position.ZoneId, npcSpawner.Position.X, npcSpawner.Position.Y, npcSpawner.Position.Z);
-            if (Math.Abs(npcSpawner.Position.Z - newZ) < 1f)
-            {
-                npcSpawner.Position.Z = newZ;
-            }
+            npcSpawner.Position.Z = ResolveSpawnZ(npcSpawner, npc);
         }
 
         npc.Transform.ApplyWorldSpawnPosition(npcSpawner.Position);
@@ -108,6 +106,116 @@ public class NpcSpawnerNpc : Spawner<Npc>
 
         npcs.Add(npc);
         return npcs;
+    }
+
+
+    /// <summary>
+    /// Resoudre la position Z d'un spawn de NPC non-volant. Conservatif par
+    /// design : garde JSON sauf cas tres clair de bug (NPC dans le sol, ou
+    /// snap mineur coherent avec le sol detecte).
+    ///
+    /// Decisions selon delta = JSON_Z - bestFloor (max raycast physique + hmap) :
+    ///   delta &lt; -MaxDownSnap         : snap upward (NPC enferme dans geometrie)
+    ///   |delta| &lt;= MaxDownSnap        : snap mineur au sol (coherent)
+    ///   MaxDownSnap &lt; delta &lt;= MaxSnap : keep JSON (unmeshed structure probable)
+    ///   delta &gt; MaxSnap                : keep JSON + WARN (suspect, manual review)
+    ///
+    /// Tous les seuils viennent de AppConfiguration.Instance.World.SpawnHeight
+    /// (configures par lot-4B1, defauts conservateurs).
+    ///
+    /// V6.1 HANDOFF inspire mais utilise le raycast physique HM (qui couvre
+    /// voxel + brush + heightmap fallback) plutot que .bai (HM a une version
+    /// limitee de bai et le code .bai d'AiGeoData est commente out runtime).
+    /// </summary>
+    private float ResolveSpawnZ(NpcSpawner npcSpawner, Npc npc)
+    {
+        var jsonZ = npcSpawner.Position.Z;
+        var posVec = npcSpawner.Position.AsPositionVector();
+        var world = npcSpawner.ParentWorld;
+
+        if (world == null)
+            return jsonZ;
+
+        var cfg = AppConfiguration.Instance.World?.SpawnHeight;
+
+        // Master switch : si resolver desactive, fallback HM legacy
+        if (cfg != null && !cfg.Enabled)
+        {
+            var legacyZ = world.GetHeight(posVec);
+            return (Math.Abs(jsonZ - legacyZ) < 1f) ? legacyZ : jsonZ;
+        }
+
+        var maxSnap = cfg?.MaxSnapDistance ?? 5.0f;
+        var maxDownSnap = cfg?.MaxDownwardSnapDistance ?? 0.5f;
+        var unmeshedThr = cfg?.UnmeshedStructureThreshold ?? 1.5f;
+        var logRes = cfg?.LogResolution ?? false;
+
+        // Candidats
+        float raycastZ;
+        try { raycastZ = world.GetHeight(posVec); }
+        catch { raycastZ = float.NaN; }
+
+        var hmapZ = float.NaN;
+        try
+        {
+            var h = world.Template?.GetHeight(posVec.X, posVec.Y);
+            if (h.HasValue && !float.IsNaN(h.Value) && !float.IsInfinity(h.Value))
+                hmapZ = h.Value;
+        }
+        catch { /* ignored */ }
+
+        var hasRaycast = !float.IsNaN(raycastZ) && !float.IsInfinity(raycastZ);
+        var hasHmap = !float.IsNaN(hmapZ);
+
+        if (!hasRaycast && !hasHmap)
+        {
+            // Aucune info -> keep JSON
+            if (logRes)
+                Logger.Trace($"[ResolveSpawnZ] {MemberId} no candidates, keep JSON Z={jsonZ:F2}");
+            return jsonZ;
+        }
+
+        // bestFloor = la plus haute surface detectee parmi les candidats valides
+        var bestFloor = float.NegativeInfinity;
+        if (hasRaycast) bestFloor = raycastZ;
+        if (hasHmap && hmapZ > bestFloor) bestFloor = hmapZ;
+
+        var delta = jsonZ - bestFloor;
+
+        // Cas 1 : JSON sous le sol (NPC enferme) -> snap upward
+        if (delta < -maxDownSnap)
+        {
+            if (logRes)
+                Logger.Trace($"[ResolveSpawnZ] {MemberId}@spawner{NpcSpawnerTemplateId} " +
+                             $"JSON sous sol delta={delta:F2}m, snap {jsonZ:F2} -> {bestFloor:F2}");
+            return bestFloor;
+        }
+
+        // Cas 2 : JSON coherent (tolerance 0.5m) -> snap mineur
+        if (Math.Abs(delta) <= maxDownSnap)
+        {
+            return bestFloor;
+        }
+
+        // Cas 3 : JSON entre 0.5m et MaxSnap au-dessus -> keep (unmeshed structure)
+        if (delta > maxDownSnap && delta <= maxSnap)
+        {
+            if (logRes && delta > unmeshedThr)
+                Logger.Trace($"[ResolveSpawnZ] {MemberId}@spawner{NpcSpawnerTemplateId} " +
+                             $"probable unmeshed structure delta={delta:F2}m, keep JSON Z={jsonZ:F2}");
+            return jsonZ;
+        }
+
+        // Cas 4 : delta > MaxSnap (>5m par defaut) -> SUSPECT mais keep JSON
+        // Snap aveugle ici casserait les NPCs sur structures > 5m (tours, donjons).
+        // Log warning pour review manuel des spawners suspects.
+        Logger.Warn($"[ResolveSpawnZ] SUSPECT npc={MemberId}@spawner{NpcSpawnerTemplateId} " +
+                    $"pos=({posVec.X:F1},{posVec.Y:F1},{jsonZ:F2}) " +
+                    $"delta={delta:F2}m vs bestFloor={bestFloor:F2} " +
+                    $"(raycast={(hasRaycast ? raycastZ.ToString("F2") : "N/A")}, " +
+                    $"hmap={(hasHmap ? hmapZ.ToString("F2") : "N/A")}) " +
+                    "- keep JSON, manual review recommended");
+        return jsonZ;
     }
 
     private List<Npc> SpawnNpcGroup(NpcSpawner npcSpawner, uint ownerID = 0)
