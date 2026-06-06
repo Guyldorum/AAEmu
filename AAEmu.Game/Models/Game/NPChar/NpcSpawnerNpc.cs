@@ -182,13 +182,30 @@ public class NpcSpawnerNpc : Spawner<Npc>
 
         var delta = jsonZ - bestFloor;
 
-        // Cas 1 : JSON sous le sol (NPC enferme) -> snap upward
-        if (delta < -maxDownSnap)
+        // Cas 1a : JSON sous le sol moderement (-MaxSnap < delta < -MaxDownSnap)
+        // NPC enferme dans la geometrie -> snap upward, log Warn visible.
+        if (delta < -maxDownSnap && delta >= -maxSnap)
         {
-            if (logRes)
-                Logger.Trace($"[ResolveSpawnZ] {MemberId}@spawner{NpcSpawnerTemplateId} " +
-                             $"JSON sous sol delta={delta:F2}m, snap {jsonZ:F2} -> {bestFloor:F2}");
+            Logger.Warn($"[ResolveSpawnZ] snap upward npc={MemberId}@spawner{NpcSpawnerTemplateId} " +
+                        $"pos=({posVec.X:F1},{posVec.Y:F1},{jsonZ:F2}) " +
+                        $"delta={delta:F2}m, snap {jsonZ:F2} -> {bestFloor:F2} " +
+                        $"(NPC sous le sol detecte)");
             return bestFloor;
+        }
+
+        // Cas 1b : JSON tres sous le sol (delta < -MaxSnap) -> SUSPECT grotte/cave
+        // Probable : NPC dans grotte ou cave profonde. Le raycast est bloque par
+        // le TOIT de la grotte au-dessus, pas le vrai sol. Snapper enverrait le
+        // NPC en surface (= disparition). Symetrique au cas 4 (suspect surface).
+        if (delta < -maxSnap)
+        {
+            Logger.Warn($"[ResolveSpawnZ] SUSPECT deep npc={MemberId}@spawner{NpcSpawnerTemplateId} " +
+                        $"pos=({posVec.X:F1},{posVec.Y:F1},{jsonZ:F2}) " +
+                        $"delta={delta:F2}m vs bestFloor={bestFloor:F2} " +
+                        $"(raycast={(hasRaycast ? raycastZ.ToString("F2") : "N/A")}, " +
+                        $"hmap={(hasHmap ? hmapZ.ToString("F2") : "N/A")}) " +
+                        "- keep JSON (probable cave/grotte, raycast bloque par toit)");
+            return jsonZ;
         }
 
         // Cas 2 : JSON coherent (tolerance 0.5m) -> snap mineur
