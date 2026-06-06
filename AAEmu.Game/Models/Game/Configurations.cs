@@ -119,7 +119,100 @@ public class WorldConfig
     public WindModelType WindModel { get; set; } = WindModelType.Official;
 
     public double ActabilityRate { get; set; } = 1.0;
+
+    /// <summary>
+    /// NPC spawn-Z resolution policy. Controls how the server reconciles the Z value declared in
+    /// <c>npc_spawns.json</c> with the heightmap and .bai navmesh data when spawning a non-flying NPC.
+    /// See <see cref="SpawnHeightConfig"/> for details.
+    /// </summary>
+    public SpawnHeightConfig SpawnHeight { get; set; } = new();
 }
+
+/// <summary>
+/// Tunable thresholds that control the spawn-Z resolution algorithm in
+/// <c>NpcSpawnerNpc.SpawnNpc</c>. Defaults are conservative on purpose: they fix the common
+/// "NPC levitates above the ground" / "NPC under the floor" cases without re-snapping NPCs that
+/// were placed deliberately on structures (interior floors, bridges, dungeon platforms, etc.).
+/// </summary>
+public class SpawnHeightConfig
+{
+    /// <summary>
+    /// Master switch. When false the new resolution logic is bypassed and the original
+    /// <c>abs(spawnZ - geoZ) &lt; 1f</c> behaviour is used. Useful for A/B testing.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Maximum 2D (XY) distance, in metres, between a spawn point and a .bai node for that
+    /// node's Z to be considered representative of the local floor. Beyond this radius the
+    /// .bai value is treated as untrusted and the heightmap is preferred. Default: 6m.
+    /// </summary>
+    public float MaxBaiDistance2D { get; set; } = 6.0f;
+
+    /// <summary>
+    /// Maximum vertical separation, in metres, between a candidate .bai Z and the local
+    /// heightmap Z for the .bai value to be considered consistent with the open-air ground.
+    /// If exceeded the .bai node is assumed to belong to a different vertical surface
+    /// (interior floor, bridge, balcony) and the heightmap is preferred. Default: 3m.
+    /// </summary>
+    public float MaxBaiVsHeightmapDelta { get; set; } = 3.0f;
+
+    /// <summary>
+    /// Maximum vertical correction, in metres, that the resolver is allowed to apply to the
+    /// JSON-declared spawn Z. Default: 5m.
+    /// </summary>
+    public float MaxSnapDistance { get; set; } = 5.0f;
+
+    /// <summary>
+    /// Threshold above which a spawn Z that exceeds hmap and bai (when they agree) is treated
+    /// as unmeshed structure (pier, dock, low balcony). Default: 1.5m.
+    /// </summary>
+    public float UnmeshedStructureThreshold { get; set; } = 1.5f;
+
+    /// <summary>
+    /// Maximum DOWNWARD snap distance. Asymmetric guard: upward corrections still allowed up
+    /// to MaxSnapDistance, but downward gaps > 0.5m are treated as NPC standing on unmeshed
+    /// sub-structure - JSON spawn Z kept verbatim. Default: 0.5m.
+    /// </summary>
+    public float MaxDownwardSnapDistance { get; set; } = 0.5f;
+
+    /// <summary>
+    /// (V5) XY radius around spawn within which GetReferenceHeight trusts spawner Z instead
+    /// of running fresh terrain lookup. Default: 3.0m. Set to 0 to disable.
+    /// </summary>
+    public float SpawnHomeXyRadius { get; set; } = 3.0f;
+
+    /// <summary>
+    /// (V6) Width of smooth transition band just outside SpawnHomeXyRadius. Eliminates Z
+    /// oscillation when XY jitters across radius boundary. Default: 4.0m. 0 = V5 hard cut.
+    /// </summary>
+    public float SpawnHomeBlendBand { get; set; } = 4.0f;
+
+    /// <summary>
+    /// (V6) When true (default), ground Z prefers interpolated heightmap over .bai navmesh
+    /// when they agree (within MaxBaiVsHeightmapDelta). Demotes .bai to a structure guard:
+    /// trusted only where it DISAGREES with heightmap (bridges, cave floors, dungeon platforms).
+    /// </summary>
+    public bool PreferHeightmapForGroundZ { get; set; } = true;
+
+    /// <summary>
+    /// When true, every non-flying NPC spawn logs (at Debug) the three candidate Z values
+    /// and decision. Disable on production - main_world has tens of thousands of spawns.
+    /// </summary>
+    public bool LogResolution { get; set; } = false;
+
+    /// <summary>
+    /// A/B test toggle. When true, restores original 3D-nearest .bai lookup. Diagnostics only.
+    /// </summary>
+    public bool UseLegacyBai3DLookup { get; set; } = false;
+
+    /// <summary>
+    /// Optional, OFF by default. Trusts .bai near JSON spawn Z even if diverging from heightmap.
+    /// For spawns deliberately on bridges/interior floors/elevated structures.
+    /// </summary>
+    public bool TrustBaiNearSpawnZ { get; set; } = false;
+}
+
 
 public class DungeonLoadConfig
 {
