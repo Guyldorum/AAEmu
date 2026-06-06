@@ -193,7 +193,7 @@ public class SpawnHeightConfig
     /// when they agree (within MaxBaiVsHeightmapDelta). Demotes .bai to a structure guard:
     /// trusted only where it DISAGREES with heightmap (bridges, cave floors, dungeon platforms).
     /// </summary>
-    public bool PreferHeightmapForGroundZ { get; set; } = true;
+    public bool PreferHeightmapForGroundZ { get; set; } = false;
 
     /// <summary>
     /// When true, every non-flying NPC spawn logs (at Debug) the three candidate Z values
