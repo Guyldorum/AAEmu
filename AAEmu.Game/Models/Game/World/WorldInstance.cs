@@ -18,6 +18,8 @@ using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 using NLog;
 
+using AAEmu.Game.Models;
+using AAEmu.Game.Models.Game;
 namespace AAEmu.Game.Models.Game.World;
 
 /// <summary>
@@ -443,6 +445,17 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
             case IdleBehavior:
                 return Math.Max(solidFloorHeight, spawnerHeight);;
         }
+
+        // === Phase 4B.4 : unmeshed structure detection ===
+        // Si pos.Z (queried) est sensiblement au-dessus du sol detecte par raycast,
+        // le NPC est sur une structure que la physique ne voit pas (brush absent ou
+        // filtre par LoadBrushMinimumSize). Preserver pos.Z evite de snapper le NPC
+        // sous la structure (bug combat empiriquement mesure : NPC tombait de 7.7m
+        // au passage en AttackBehavior cf. lot-4B3 / npcheight.csv).
+        var spawnHeightCfg = AppConfiguration.Instance.World?.SpawnHeight;
+        var unmeshedThr = spawnHeightCfg?.UnmeshedStructureThreshold ?? 1.5f;
+        if (pos.Z - solidFloorHeight > unmeshedThr)
+            return pos.Z;
 
         // 3. Terrain height retrieval
         if (solidFloorHeight >= 0f /* && Math.Abs(worldHeight - Spawner.Position.Z) <= 0.1f*/)
