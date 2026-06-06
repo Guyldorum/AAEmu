@@ -7,12 +7,15 @@ using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Utils.DB;
 
 using Microsoft.Data.Sqlite;
+using NLog;
 
 namespace AAEmu.Game.GameData;
 
 [GameData]
 public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
 {
+    private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+
     private Dictionary<uint, List<NpcSkill>> _skillsForNpc = [];
     private Dictionary<uint, List<NpcPassiveBuff>> _passivesForNpc = [];
     public Dictionary<uint, NpcSpawnerNpc> _npcSpawnerTemplateNpcs = [];      // Id, nsn
@@ -150,6 +153,15 @@ public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
             var template = NpcManager.Instance.GetTemplate(templateId);
             template?.PassiveBuffs.AddRange(passives);
         }
+
+        // Phase 4A3 fix : HM avait supprime cet appel a tort. Sans lui,
+        // _npcMemberAndSpawnerTemplateIds reste vide -> GetSpawnerIds()
+        // retourne null pour tous les NPCs -> branche FAKE de
+        // SpawnManager.AddNpcSpawner attribue template id=1 (radius minable)
+        // -> NPCs jamais actives par ActiveRegionTick (filter IsSpawnerActive).
+        // L'appel a ete deplace dans NpcManager.cs:772 mais ne fonctionne
+        // pas en pratique (ordre d'init incorrect).
+        LoadMemberAndSpawnerTemplateIds();
     }
 
     public void LoadMemberAndSpawnerTemplateIds()
@@ -168,6 +180,10 @@ public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
                 value.Add(nsn.NpcSpawnerTemplateId);
             }
         }
+
+        Logger.Info($"[Phase4Diag3] LoadMemberAndSpawnerTemplateIds done: " +
+                    $"_npcSpawnerTemplateNpcs.Count={_npcSpawnerTemplateNpcs.Count}, " +
+                    $"_npcMemberAndSpawnerTemplateIds.Count={_npcMemberAndSpawnerTemplateIds.Count}");
     }
 
     public List<uint> GetSpawnerIds(uint memberId)
