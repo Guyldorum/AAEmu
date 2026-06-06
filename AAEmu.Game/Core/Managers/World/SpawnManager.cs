@@ -68,9 +68,9 @@ public class SpawnManager(WorldInstance parentWorld)
             {
                 var npcSpawnerIds = NpcGameData.Instance.GetSpawnerIds(npcSpawner.UnitId);
                 var spawners = new List<NpcSpawner>();
-                if (npcSpawnerIds == null)
+                if (npcSpawnerIds == null || npcSpawnerIds.Count == 0)
                 {
-                    Logger.Trace($"SpawnerIds for Npc={npcSpawner.UnitId} doesn't exist");
+                    Logger.Trace($"[Phase4Diag] SpawnerIds for Npc={npcSpawner.UnitId} is {(npcSpawnerIds == null ? "null" : "empty list")} - generating fake spawner");
                     Logger.Trace($"Generate Spawner for Npc={npcSpawner.UnitId}...");
                     var id = _fakeSpawnerId;
                     npcSpawner.ParentWorld = World;
