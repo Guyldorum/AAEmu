@@ -9,6 +9,9 @@ public enum BuffConstants : uint
     EquipmentBuffTag = 156,
     Untouchable = 545,
     NpcReturn = 550, // NPC returning home
+    WeakenedBody = 1128, // PvE death penalty
+    RespawnCooldown = 2385, // 5 min cooldown after temple-revive
+    WarZoneLeech = 4424, // PvP death penalty in War zones
     Cloth4P = 713,
     Cloth7P = 714,
     Leather4P = 715,
@@ -24,6 +27,8 @@ public enum BuffConstants : uint
     Dash = 2675,
     Deterioration = 3553, // Deterioration
     TaxProtection = 3554, // Tax Protection
+    Wanted = 3710, // CrimePoint >= 50
+    Contemptuous = 4832, // Pirate
     EquipDualwield = 4899,
     ScoreMemorized = 6010,
     FlutePlay = 6176,
@@ -33,7 +38,9 @@ public enum BuffConstants : uint
     EquipTwoHanded = 8227,
     InBeautySalon = 6117,
     SearchSchoolOfFish = 5736,
-    Overburdened = 831, // SustainBuff - Carrying heavy objects reduces movement speed and prevents teleporting or gliding.
-    MasterOwnership = 4867  // Vehicle ownership buff, prevents non-owners from attaching to the vehicle.
-    // Overburdened = 7221
+    OwnersMark = 4867,  // Vehicle ownership buff, prevents non-owners from attaching to the vehicle.
+    // Tags
+    TagOverburdened = 831, // SustainBuff - Carrying heavy objects reduces movement speed and prevents teleporting or gliding.
+    TagWanted = 894,
+    TagOffender = 1008,
 }

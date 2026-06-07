@@ -16,6 +16,7 @@ using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Buffs;
+using AAEmu.Game.Models.Game.Skills.SkillControllers;
 using AAEmu.Game.Models.Game.Slaves;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Static;
@@ -41,7 +42,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
         lock (_slaveListLock)
         {
             var slaves = World.GetAllSlaves();
-            return slaves.FirstOrDefault(slave => slave.Summoner?.ObjId == objId);
+            return slaves.FirstOrDefault(slave => slave.Summoner?.ObjId == objId && !slave.IsDead);
         }
     }
 
@@ -134,6 +135,15 @@ public class SlaveManager(WorldInstance parentWorldInstance)
     public void UnbindSlave(Character character, uint tlId, AttachUnitReason reason)
     {
         var slave = GetSlaveByTlId(tlId);
+        if (slave == null)
+        {
+            character.Transform.Parent = null;
+            character.Transform.StickyParent = null;
+            character.Buffs.TriggerRemoveOn(BuffRemoveOn.Unmount);
+            character.AttachedPoint = AttachPointKind.None;
+            character.BroadcastPacket(new SCUnitDetachedPacket(character.ObjId, reason), true);
+            return;
+        }
 
         var attachPoint = slave.AttachedCharacters.FirstOrDefault(x => x.Value == character).Key;
         if (attachPoint != default)
@@ -141,6 +151,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
             slave.AttachedCharacters.Remove(attachPoint);
             character.Transform.Parent = null;
             character.Transform.StickyParent = null;
+            ShipHarpoonRopeController.OnOperatorLeftSlave(slave, character);
         }
 
         character.Buffs.TriggerRemoveOn(BuffRemoveOn.Unmount);
@@ -165,7 +176,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
             return;
 
         // Check if the vehicle has the MasterOwnership buff and if the character is not the owner, block the attachment.
-        if (attachPoint == AttachPointKind.Driver && slave.Buffs.CheckBuff((uint)BuffConstants.MasterOwnership) && slave.Summoner.ObjId != character.ObjId)
+        if (attachPoint == AttachPointKind.Driver && slave.Buffs.CheckBuff((uint)BuffConstants.OwnersMark) && slave.Summoner?.ObjId != character.ObjId)
         {
             character.SendErrorMessage(ErrorMessageType.SlaveAlreadyHasMaster); // 仅阻止驾驶座附加
             return;
@@ -194,7 +205,12 @@ public class SlaveManager(WorldInstance parentWorldInstance)
     public void BindSlave(GameConnection connection, uint tlId)
     {
         var unit = connection.ActiveChar;
+        if (unit == null)
+            return;
+
         var slave = GetSlaveByTlId(tlId);
+        if (slave == null || slave.IsDead)
+            return;
 
         BindSlave(unit, slave.ObjId, AttachPointKind.Driver, AttachUnitReason.NewMaster);
     }
@@ -501,6 +517,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
             Spawner = useSpawner,
             OwnerType = owner != null ? BaseUnitType.Character : BaseUnitType.Invalid,
             OwnerId = owner?.Id ?? 0,
+            OwnerObjId = owner?.ObjId ?? 0,
         };
 
         ApplySlaveBonuses(summonedSlave);
@@ -535,6 +552,24 @@ public class SlaveManager(WorldInstance parentWorldInstance)
 
         // Move it to target location, and call spawn packet
         summonedSlave.Transform = spawnPos.CloneDetached(summonedSlave);
+
+        if (summonedSlave.Template.IsABoat() && summonedSlave.Template.PortalTime > 0f)
+        {
+            var spawnWorld = WorldManager.Instance.GetWorld(summonedSlave.Transform.InstanceId);
+            var waterAtFinal = spawnWorld?.Water?.GetWaterSurface(summonedSlave.Transform.World.Position, out _) ?? 0f;
+            if (waterAtFinal > 0f)
+            {
+                var mul = AAEmu.Game.Physics.Forces.Buoyancy.ShipWaterDensityMul;
+                if (mul > 0f)
+                {
+                    var targetSubmerged = 1f / (AAEmu.Game.Physics.Forces.Buoyancy.BaseWaterDensity * mul);
+                    var targetZ = waterAtFinal - targetSubmerged;
+                    if (summonedSlave.Transform.Local.Position.Z < targetZ)
+                        summonedSlave.Transform.Local.SetHeight(targetZ);
+                }
+            }
+        }
+
         summonedSlave.Spawn();
         #endregion
 
@@ -570,6 +605,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
                 Template = DoodadManager.Instance.GetTemplate(doodadBinding.DoodadId),
                 Data = (byte)doodadBinding.AttachPointId, // copy of AttachPointId
                 ParentObj = summonedSlave,
+                ParentWorld = summonedSlave.ParentWorld, // FIX: Spawn() throws "no owning parent world" without this
                 Faction = summonedSlave.Faction,
                 Type2 = 1u, // Flag: No idea why it's 1 for slave's doodads, seems to be 0 for everything else
                 Spawner = null,
@@ -974,6 +1010,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
                     Template = DoodadManager.Instance.GetTemplate(healBinding.DoodadId),
                     Data = (byte)wreckPointLocation, // copy of AttachPointId
                     ParentObj = slave,
+                    ParentWorld = slave.ParentWorld, // FIX: Spawn() throws "no owning parent world" without this
                     Faction = slave.Faction, // FactionManager.Instance.GetFaction(FactionsEnum.Friendly),
                     Type2 = 1u, // Flag: No idea why it's 1 for slave's doodads, seems to be 0 for everything else
                     Spawner = null,
