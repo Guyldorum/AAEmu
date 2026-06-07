@@ -1048,4 +1048,10 @@ public class Slave : Unit
         CachedWaterSurface = ParentWorld.Water.GetWaterSurface(Transform.World.Position, out var cachedWaterFlow);
         CachedWaterFlow = cachedWaterFlow;
     }
+
+    public override Character GetOwnerCharacter()
+    {
+        var ownerObject = Summoner ?? (OwnerObjId > 0 ? ParentWorld.GetGameObject(OwnerObjId) as BaseUnit : null);
+        return ownerObject?.GetOwnerCharacter();
+    }
 }

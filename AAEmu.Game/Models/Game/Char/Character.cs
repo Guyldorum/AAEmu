@@ -2801,4 +2801,9 @@ public partial class Character : Unit, ICharacter
     {
         return base.DebugName() + " (" + Id + ")";
     }
+
+    public override Character GetOwnerCharacter()
+    {
+        return this;
+    }
 }

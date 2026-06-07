@@ -1021,4 +1021,14 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
         WorldCellTerrainLoadingTask = null;
         Logger.Info($"Finished TerrainLoading Queue of {cellsLoaded} cells. ({GameService.TimeSinceStart} since server start)");
     }
+
+    /// <summary>
+    /// Get a Slave instance by its ObjId
+    /// </summary>
+    /// <param name="slaveObjId"></param>
+    /// <returns></returns>
+    public Slave GetSlaveByObjId(uint slaveObjId)
+    {
+        return _slaves.GetValueOrDefault(slaveObjId);
+    }
 }

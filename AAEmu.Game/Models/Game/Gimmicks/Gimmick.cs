@@ -3,6 +3,7 @@
 using AAEmu.Commons.Network;
 using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Chat;
@@ -251,5 +252,13 @@ public class Gimmick : Unit
             gimmick.Vel = Vector3.Zero;
             gimmick.IsMoving = false;
         }
+    }
+
+    public override Character GetOwnerCharacter()
+    {
+        // Not sure if this is even needed
+        if (OwnerId > 0)
+            return WorldManager.Instance.GetCharacterById(OwnerId)?.GetOwnerCharacter();
+        return null;
     }
 }

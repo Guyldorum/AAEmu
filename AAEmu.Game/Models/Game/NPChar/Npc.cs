@@ -1681,4 +1681,12 @@ public partial class Npc : Unit
 
         base.Delete();
     }
+
+    public override Character GetOwnerCharacter()
+    {
+        // Not sure if this needs to be implemented for escort NPCs
+        // if (OwnerId > 0)
+        //     return WorldManager.Instance.GetCharacterById(OwnerId)?.GetOwnerCharacter();
+        return null;
+    }
 }

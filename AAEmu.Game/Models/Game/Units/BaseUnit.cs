@@ -211,4 +211,9 @@ public class BaseUnit : GameObject, IBaseUnit
 
         return Math.Max(rawDist, 0);
     }
+
+    public virtual Character GetOwnerCharacter()
+    {
+        return null;
+    }
 }
