@@ -1145,7 +1145,7 @@ public partial class Npc : Unit
 
     //Tagging!
 
-    private static void CheckIfEmptyAggroToReturn(IBaseUnit unit)
+    public void CheckIfEmptyAggroToReturn(IBaseUnit unit)
     {
         if (unit is not Npc npc)
             return;
