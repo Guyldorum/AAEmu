@@ -15,6 +15,7 @@ public class SaveManagerTests
         var mockMail = new Mock<IMailManager>();
         var mockItem = new Mock<IItemManager>();
         var mockAuction = new Mock<IAuctionManager>();
+        var mockCrime = new Mock<ICrimeManager>();
         var mockWorld = new Mock<IWorldManager>();
 
         var manager = new SaveManager(
@@ -23,6 +24,7 @@ public class SaveManagerTests
             mockMail.Object,
             mockItem.Object,
             mockAuction.Object,
+            mockCrime.Object,
             mockWorld.Object);
 
         Assert.NotNull(manager);
@@ -31,6 +33,7 @@ public class SaveManagerTests
         mockMail.VerifyNoOtherCalls();
         mockItem.VerifyNoOtherCalls();
         mockAuction.VerifyNoOtherCalls();
+        mockCrime.VerifyNoOtherCalls();
         mockWorld.VerifyNoOtherCalls();
     }
 }
