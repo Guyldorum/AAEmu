@@ -256,6 +256,9 @@ public static class Program
                 services.AddSingleton<ITradeManager>(sp => sp.GetRequiredService<TradeManager>());
 
                 // -- Singleton<T>-based managers (AAEmu.Game.Core.Managers.UnitManagers) --
+                services.AddSingleton<CrimeManager>();
+                services.AddSingleton<ICrimeManager>(sp => sp.GetRequiredService<CrimeManager>());
+
                 services.AddSingleton<CharacterManager>();
                 services.AddSingleton<ICharacterManager>(sp => sp.GetRequiredService<CharacterManager>());
 
@@ -307,6 +310,9 @@ public static class Program
 
                 services.AddSingleton<DoodadIdManager>();
                 services.AddSingleton<IDoodadIdManager>(sp => sp.GetRequiredService<DoodadIdManager>());
+
+                services.AddSingleton<CrimeIdManager>();
+                services.AddSingleton<ICrimeIdManager>(sp => sp.GetRequiredService<CrimeIdManager>());
 
                 services.AddSingleton<ExpeditionIdManager>();
                 services.AddSingleton<IExpeditionIdManager>(sp => sp.GetRequiredService<ExpeditionIdManager>());
