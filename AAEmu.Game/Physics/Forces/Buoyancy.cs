@@ -22,7 +22,7 @@ public class Buoyancy : ForceGenerator
     /// 1.0 = default, higher floats higher (less draft), lower sits deeper.
     /// Applied only for ships (bodies tagged with <see cref="Slave"/> that have a <c>ShipController</c>).
     /// </summary>
-    public static float ShipWaterDensityMul = 3f;
+    public static float ShipWaterDensityMul = 1f;
 
 
     /// <summary>
