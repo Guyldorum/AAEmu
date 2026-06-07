@@ -777,12 +777,19 @@ public class Slave : Unit
         Summoner?.SendPacket(new SCMySlavePacket(ObjId, TlId, Name, TemplateId, Hp, MaxHp, Transform.World.Position.X, Transform.World.Position.Y, Transform.World.Position.Z));
         Summoner?.BroadcastPacket(new SCSlaveRemovedPacket(Summoner.ObjId, TlId), true);
 
+        ClearAllAggro();
+
         // Remove from physics simulation (ships only). Passagers cleanup
-        // déjà géré par RegenTick L~1003-1007 (détection IsDead).
-        // TODO lot-6.2.2.b/c : réintégrer ClearAllAggro() (besoin Unit.cs)
-        //   et ParentWorld.SpawnManager.AddDespawn(this) (besoin SpawnManager.cs).
+        // déjà géré par RegenTick (détection IsDead) — laissé en place côté MERG
+        // pour gérer le cas où un passenger arrive après le DoDie. DEV fait ça
+        // ici directement, mais l'approche MERG est légèrement plus robuste.
         if (Template.IsABoat())
             WorldManager.Instance.GetWorld(Transform.InstanceId)?.Physics.RemoveShip(this);
+
+        // Schedule full cleanup via slave.Delete() → Hide() + DetachAll() + RemoveObject().
+        // Keeps the slave visible and selectable during the death animation.
+        Despawn = DateTime.UtcNow.AddSeconds(Spawner?.DespawnTime ?? 20);
+        ParentWorld.SpawnManager.AddDespawn(this);
     }
 
     /// <summary>
