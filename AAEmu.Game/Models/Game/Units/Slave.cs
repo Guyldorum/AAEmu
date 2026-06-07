@@ -751,18 +751,6 @@ public class Slave : Unit
         if (dealt <= 0) return;
         BroadcastPacket(new SCEnvDamagePacket(EnvSource.Collision, ObjId, (uint)dealt), true);
     }
-    // ===== end Ship Physics damage hooks =====
-
-    public void DoFloorCollisionDamage(int damage, bool isPercent = true, KillReason killReason = KillReason.Damage)
-    {
-        // If % based, calculate its damage
-        if (isPercent)
-        {
-            damage = MaxHp * damage / 100;
-        }
-
-        ReduceCurrentHp(this, damage, killReason);
-    }
 
     public override void PostUpdateCurrentHp(BaseUnit attacker, int oldHpValue, int newHpValue, KillReason killReason = KillReason.Damage)
     {
@@ -787,7 +775,14 @@ public class Slave : Unit
         MarkSummoningItemAsDestroyed();
 
         Summoner?.SendPacket(new SCMySlavePacket(ObjId, TlId, Name, TemplateId, Hp, MaxHp, Transform.World.Position.X, Transform.World.Position.Y, Transform.World.Position.Z));
-        Summoner?.SendPacket(new SCSlaveRemovedPacket(ObjId, TlId));
+        Summoner?.BroadcastPacket(new SCSlaveRemovedPacket(Summoner.ObjId, TlId), true);
+
+        // Remove from physics simulation (ships only). Passagers cleanup
+        // déjà géré par RegenTick L~1003-1007 (détection IsDead).
+        // TODO lot-6.2.2.b/c : réintégrer ClearAllAggro() (besoin Unit.cs)
+        //   et ParentWorld.SpawnManager.AddDespawn(this) (besoin SpawnManager.cs).
+        if (Template.IsABoat())
+            WorldManager.Instance.GetWorld(Transform.InstanceId)?.Physics.RemoveShip(this);
     }
 
     /// <summary>
@@ -819,7 +814,7 @@ public class Slave : Unit
                         if (newDoodad == null)
                         {
                             Logger.Warn($"Dropped Doodad {newDoodadId}, from BackpackDoodadId could not be created");
-                            return;
+                            break;
                         }
                         newDoodad.IsPersistent = true;
                         newDoodad.Transform = doodad.Transform.CloneDetached();
