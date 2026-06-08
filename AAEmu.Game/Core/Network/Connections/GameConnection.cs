@@ -186,12 +186,17 @@ public class GameConnection
         // Remove Radars
         RadarManager.Instance.UnRegister(activeChar);
 
+        // Cancel all running buff effect tasks before removing the character.
+        // The buffs themselves are saved to DB inside SaveDirectlyToDatabase() → Character.Save().
+        activeChar.Buffs?.CancelAllEffectTasks();
+
+        // Hide/Despawn the player
         activeChar.Delete();
         // Removed ReleaseId here to try and fix party/raid disconnect and reconnect issues. Replaced with saving the data
         //ObjectIdManager.Instance.ReleaseId(ActiveChar.ObjId);
 
         // Do a manual save here as it's no longer in _characters at this point
-        // TODO: might need a better option like saving this transaction for later to be used by the SaveMananger
+        // TODO: might need a better option like saving this transaction for later to be used by the SaveManager
         activeChar.SaveDirectlyToDatabase();
     }
 }
