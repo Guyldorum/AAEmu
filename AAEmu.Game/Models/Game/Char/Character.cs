@@ -1588,11 +1588,29 @@ public partial class Character : Unit, ICharacter
 
         base.SetPosition(x, y, z, rotationX, rotationY, rotationZ);
 
-        var worldDrownThreshold = WorldManager.Instance.GetWorld(Transform.InstanceId)?.Template.OceanLevel - 2f ?? 98f;
-        if (!IsUnderWater && Transform.World.Position.Z < worldDrownThreshold)
-            IsUnderWater = true;
-        else if (IsUnderWater && Transform.World.Position.Z > worldDrownThreshold)
-            IsUnderWater = false;
+        // [lot-7.5.e.5] Breath check via IsWater volume test (covers ocean + inland lakes/rivers
+        // ingested by lot-7.5.e.3). Replaces HM legacy `Z < OceanLevel - 2f` which only worked
+        // for global ocean. Threshold + hysteresis (35cm dead band) for stable enter/exit.
+        var world = WorldManager.Instance.GetWorld(Transform.InstanceId);
+        var probePos = Transform.World.Position;
+        if (world == null || !world.IsWater(probePos))
+        {
+            if (IsUnderWater)
+                IsUnderWater = false;
+        }
+        else
+        {
+            var waterSurface = world.Water?.GetWaterSurface(probePos, out _) ?? world.Template.OceanLevel;
+            const float surfaceBand = 2f;
+            const float hysteresis = 0.35f;
+            var enterThreshold = waterSurface - surfaceBand;
+            var exitThreshold = waterSurface - surfaceBand + hysteresis;
+
+            if (!IsUnderWater && probePos.Z < enterThreshold)
+                IsUnderWater = true;
+            else if (IsUnderWater && probePos.Z > exitThreshold)
+                IsUnderWater = false;
+        }
 
         // Connection.ActiveChar.SendMessage("Move New Pos: {0}", Transform.ToString());
 
