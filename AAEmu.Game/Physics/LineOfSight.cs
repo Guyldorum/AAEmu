@@ -27,6 +27,12 @@ public static class LineOfSight
     /// <summary>Tolérance verticale : si terrainZ &gt; rayZ + tol → blocked.</summary>
     public const float HeightmapTolerance = 0.1f;
 
+    /// <summary>Lambda minimal sur un hit brush pour le considérer comme un obstacle réel.
+    /// Les hits avec lambda &lt; 0.5m sont des self-collisions : le caster est lui-même
+    /// dans le BBox englobant d'un brush (sous un toit, sur un seuil, etc.) et le raycast
+    /// tape immédiatement les bords intérieurs.</summary>
+    public const float MinHitLambda = 0.5f;
+
     /// <summary>
     /// Test LoS entre 2 points AAEmu (Z-up). Retourne true si dégagé.
     /// </summary>
@@ -79,7 +85,9 @@ public static class LineOfSight
                 {
                     if (brushShape.RayCast(jOrigin, jDirNorm, out _, out var lambda))
                     {
-                        if (lambda > 0f && lambda < distance && lambda < minLambda)
+                        // lambda > MinHitLambda : filtre self-collision (caster dans un BBox brush)
+                        // lambda < distance     : le hit doit être avant la cible
+                        if (lambda > MinHitLambda && lambda < distance && lambda < minLambda)
                         {
                             minLambda = lambda;
                             hitFound = true;
