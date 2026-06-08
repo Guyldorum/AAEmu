@@ -18,6 +18,7 @@
         "LoadBrushMinimumSize": 15.0,
         "MaxInstances": 32,
         "TargetPhysicsTps": 25.0,
-        "ActabilityRate": 1.0
+        "ActabilityRate": 1.0,
+        "PvpHonorRate": 1.0
     }
 }
