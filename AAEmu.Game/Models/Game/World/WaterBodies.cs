@@ -470,7 +470,12 @@ public class WaterBodies
 
         var newRiver = new WaterBodyArea($"Segment_C{worldCell.CellX}-{worldCell.CellY}_{prefabIdx}",
             WaterBodyAreaType.LineArray);
-        newRiver.Depth = water.Depth;
+        // [lot-7.5.e.6] Cap river depth: client `water.Depth` often encodes the whole
+        // water column down to a low cell floor (10m+), causing the slab Z to extend
+        // deep under terrain near banks → false IsWater on shore. Real rivers AA are
+        // 1-3m; 4m leaves margin for canyon-encased rivers. Lakes (polygon) unaffected.
+        const float RiverMaxRealisticDepth = 4f;
+        newRiver.Depth = Math.Min(water.Depth, RiverMaxRealisticDepth);
         newRiver.RiverWidth = Math.Clamp(water.Depth * 2f, 4f, 40f);
         foreach (var centerPoint in riverWorldPoints)
         {
