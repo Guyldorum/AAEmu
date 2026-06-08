@@ -592,7 +592,13 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             RenewCategory = reader.GetInt32("renew_category"),
                             ItemProcId = reader.GetInt32("item_proc_id"),
                             StatMultiplier = reader.GetInt32("stat_multiplier"),
-                            FormulaHDps = new Formula(reader.GetString("formula_hdps"))
+                            FormulaHDps = new Formula(reader.GetString("formula_hdps")),
+                            AnimR1Id = reader.GetUInt32("anim_r1_id", 0),
+                            AnimL1Id = reader.GetUInt32("anim_l1_id", 0),
+                            AnimR2Id = reader.GetUInt32("anim_r2_id", 0),
+                            AnimL2Id = reader.GetUInt32("anim_l2_id", 0),
+                            AnimR3Id = reader.GetUInt32("anim_r3_id", 0),
+                            AnimL3Id = reader.GetUInt32("anim_l3_id", 0)
                         };
 
                         _holdables.Add(template.Id, template);
@@ -892,7 +898,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
 
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM item_body_parts";
+                command.CommandText = "SELECT * FROM item_body_parts ORDER BY id";
                 command.Prepare();
                 using (var sqliteReader = command.ExecuteReader())
                 using (var reader = new SQLiteWrapperReader(sqliteReader))
@@ -1416,6 +1422,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
 
         OnItemsLoaded?.Invoke(this, EventArgs.Empty);
         _loaded = true;
+        LoadUserItems();
     }
 
     public Item GetItemByItemId(ulong itemId)

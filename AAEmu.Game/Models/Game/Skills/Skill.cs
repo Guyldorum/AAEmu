@@ -1,4 +1,6 @@
-﻿using AAEmu.Commons.Utils;
+using System.Numerics;
+
+using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
@@ -23,6 +25,7 @@ using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Skills.Utils;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.StaticValues;
+using AAEmu.Game.Physics;
 using AAEmu.Game.Models.Tasks.Skills;
 using AAEmu.Game.Utils;
 
@@ -52,8 +55,8 @@ public class Skill
     /// </summary>
     public float CastTimeMultiplier { get; set; } = 1f;
 
-    //public bool isAutoAttack;
-    //public SkillTask autoAttackTask;
+    /// <summary>Counter for auto-attack animation cycling (incremented each attack)</summary>
+    public int AutoAttackIndex { get; set; }
 
     public Skill()
     {
@@ -188,7 +191,7 @@ public class Skill
         // Get a TlId for this skill
         TlId = SkillTlIdManager.GetNextId(caster);
         // if (caster is Character)
-        Logger.Trace($"Created SkillTlId {TlId} for Skill {Template.Id}, Caster {caster.Name} ({caster.TemplateId}:{caster.ObjId}) with target {target.Name} ({target.TemplateId}:{target.ObjId})");
+        Logger.Debug($"Created SkillTlId {TlId} for Skill {Template.Id}, Caster {caster.Name} ({caster.TemplateId}:{caster.ObjId}) with target {target.Name} ({target.TemplateId}:{target.ObjId})");
 
         // If skill uses Plots, then start the plot
         if (Template.Plot != null)
@@ -219,7 +222,7 @@ public class Skill
         if (Template.WeaponSlotForRangeId > 0)
         {
             var minWeaponRange = 0.0f; // Fist default
-            var maxWeaponRange = 4.0f; // Fist default
+            var maxWeaponRange = 3.0f; // Fist default
             if (unit.Equipment.GetItemBySlot(Template.WeaponSlotForRangeId)?.Template is WeaponTemplate weaponTemplate)
             {
                 minWeaponRange = weaponTemplate.HoldableTemplate.MinRange;
@@ -234,7 +237,7 @@ public class Skill
         {
             SkillTlIdManager.ReleaseId(TlId);
             TlId = 0;
-            Logger.Debug($"TooCloseRange targetDist={targetDist}, minRangeCheck={minRangeCheck}, SkillTlId {TlId} for Skill {Template.Id}, Caster {caster.Name} ({caster.TemplateId}:{caster.ObjId}) with target {target.Name} ({target.TemplateId}:{target.ObjId})");
+            Logger.Info($"TooCloseRange targetDist={targetDist}, minRangeCheck={minRangeCheck}, SkillTlId {TlId} for Skill {Template.Id}, Caster {caster.Name} ({caster.TemplateId}:{caster.ObjId}) with target {target.Name} ({target.TemplateId}:{target.ObjId})");
             return SkillResult.TooCloseRange;
         }
 
@@ -244,7 +247,7 @@ public class Skill
         {
             SkillTlIdManager.ReleaseId(TlId);
             TlId = 0;
-            Logger.Debug($"TooFarRange targetDist={targetDist}, maxRangeCheck={maxRangeCheck}, SkillTlId {TlId} for Skill {Template.Id}, Caster {caster.Name} ({caster.TemplateId}:{caster.ObjId}) with target {target.Name} ({target.TemplateId}:{target.ObjId})");
+            Logger.Info($"TooFarRange targetDist={targetDist}, maxRangeCheck={maxRangeCheck}, SkillTlId {TlId} for Skill {Template.Id}, Caster {caster.Name} ({caster.TemplateId}:{caster.ObjId}) with target {target.Name} ({target.TemplateId}:{target.ObjId})");
             return SkillResult.TooFarRange;
         }
 
@@ -518,8 +521,18 @@ public class Skill
                 break;
             case SkillTargetType.SummonPos:
                 break;
+            // Ship harpoon Launch Harpoon (13749) uses target_type_id 13 = RelativePos with a world Position from the client.
             case SkillTargetType.RelativePos:
-                break;
+                {
+                    if (targetCaster is SkillCastPositionTarget or SkillCastPosition2Target or SkillCastPosition3Target)
+                    {
+                        target = SetInitialTarget(caster, targetCaster);
+                        if (caster.ObjId == target.ObjId)
+                            return null;
+                    }
+
+                    break;
+                }
             case SkillTargetType.SourcePos:
                 break;
             case SkillTargetType.ArtilleryPos:
@@ -554,6 +567,21 @@ public class Skill
                 {
                     if (caster is Npc { CurrentTarget: not null } npc)
                         positionUnit.Transform.Local.SetPosition(npc.CurrentTarget.Transform.Local.Position.X, npc.CurrentTarget.Transform.Local.Position.Y, npc.CurrentTarget.Transform.Local.Position.Z);
+                    else if (positionTarget.ObjId1 != 0)
+                    {
+                        var worldInst = caster.ParentWorld ?? WorldManager.Instance.GetWorld(caster.Transform.InstanceId);
+                        if (worldInst?.GetBaseUnit(positionTarget.ObjId1) is BaseUnit basisUnit)
+                        {
+                            // Hit in basis unit's local frame (e.g. harpoon on hull); Pos* are not world meters.
+                            var basisRot = basisUnit.Transform.World.ToQuaternion();
+                            var basisScale = basisUnit.Scale;
+                            var localHit = new Vector3(positionTarget.PosX, positionTarget.PosY, positionTarget.PosZ);
+                            var worldHit = Vector3.Transform(localHit * basisScale, basisRot) + basisUnit.Transform.World.Position;
+                            positionUnit.Transform.Local.SetPosition(worldHit.X, worldHit.Y, worldHit.Z);
+                        }
+                        else
+                            positionUnit.Transform.Local.SetPosition(caster.Transform.World.Position.X, caster.Transform.World.Position.Y, caster.Transform.World.Position.Z);
+                    }
                     else
                         positionUnit.Transform.Local.SetPosition(positionTarget.PosX, positionTarget.PosY, positionTarget.PosZ);
                     break;
@@ -807,10 +835,16 @@ public class Skill
         if (Template.FireAnim != null && Template.UseAnimTime)
             totalDelay += (int)(Template.FireAnim.CombatSyncTime * (unit.GlobalCooldownMul / 100));
 
-        caster.BroadcastPacket(new SCSkillFiredPacket(Id, TlId, casterCaster, targetCaster, this, skillObject)
+        // Determine weapon-based animation for auto-attacks (skill 2/3/4).
+        // 0 means "no override" — packet keeps its default (skill template's FireAnim).
+        var weaponAnimId = GetWeaponAttackAnimId(caster);
+        var firedPacket = new SCSkillFiredPacket(Id, TlId, casterCaster, targetCaster, this, skillObject)
         {
             ComputedDelay = (short)totalDelay
-        }, true);
+        };
+        if (weaponAnimId > 0)
+            firedPacket.FireAnimId = weaponAnimId;
+        caster.BroadcastPacket(firedPacket, true);
 
         if (totalDelay > 0)
         {
@@ -822,6 +856,51 @@ public class Skill
             ApplyEffects(caster, casterCaster, target, targetCaster, skillObject);
             EndSkill(caster);
         }
+    }
+
+    /// <summary>
+    /// Get the weapon-based attack animation ID for auto-attack skills (2/3/4).
+    /// Returns 0 for non-auto-attack skills (packet will use FireAnim from template).
+    /// NPCs cycle between melee animation IDs 1 and 2 so AI mobs always have a visible swing.
+    /// </summary>
+    private uint GetWeaponAttackAnimId(BaseUnit caster)
+    {
+        if (Template.Id is not (2 or 3 or 4))
+            return 0;
+
+        if (caster is NPChar.Npc)
+        {
+            // NPCs cycle between two melee attack animations (side strikes).
+            // Without this, NPC auto-attacks would inherit the skill template's
+            // FireAnim — often null or wrong, causing the "AI feels broken" symptom.
+            var npcAnim = (uint)((AutoAttackIndex % 2) + 1); // animation IDs 1 and 2
+            AutoAttackIndex++;
+            return npcAnim;
+        }
+
+        if (caster is not Character character)
+            return 0;
+
+        var slot = Template.Id switch
+        {
+            3 => EquipmentItemSlot.Offhand,
+            4 => EquipmentItemSlot.Ranged,
+            _ => EquipmentItemSlot.Mainhand
+        };
+
+        var weapon = character.Equipment?.GetItemBySlot((int)slot);
+        if (weapon?.Template is WeaponTemplate wt && wt.HoldableTemplate != null)
+        {
+            var leftHand = Template.Id == 3; // Offhand = left hand
+            var animId = wt.HoldableTemplate.GetAttackAnimId(AutoAttackIndex, leftHand);
+            AutoAttackIndex++;
+            return animId;
+        }
+
+        // No weapon equipped — fist animations (cycle between 1 and 2)
+        var fistAnim = (AutoAttackIndex % 2 == 0) ? 1u : 2u;
+        AutoAttackIndex++;
+        return fistAnim;
     }
 
     private IEnumerable<BaseUnit> FilterAoeUnits(BaseUnit caster, IEnumerable<BaseUnit> units)
@@ -858,12 +937,23 @@ public class Skill
         {
             possibleTargets.Add(targetSelf);
         }
+
+        ShipSiegeAoEHit.AppendHostileShipsHitBySiegeHullAoE(caster, Template, targetSelf, targetCaster, possibleTargets);
+
         // Filter out duplicate entries and non-existing
         possibleTargets = possibleTargets.Distinct().ToList();
         // Add origin in case of no targets and using a target position cast
         if (possibleTargets.Count <= 0 && targetCaster is SkillCastPositionTarget)
         {
             possibleTargets.Add(caster);
+        }
+
+        if (Template.TargetAreaCount > 0 && possibleTargets.Count > Template.TargetAreaCount)
+        {
+            possibleTargets = possibleTargets
+                .OrderBy(t => t.GetDistanceTo(targetSelf))
+                .Take(Template.TargetAreaCount)
+                .ToList();
         }
 
         foreach (var target in possibleTargets)
@@ -1021,13 +1111,6 @@ public class Skill
                 effectsToApply.Add((target, effect));
                 lastAppliedEffect = effect;
                 //effect.Template?.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow, packets);
-
-                // TODO: Fix this HACK, only use the first target if it's a position.
-                // Hack added to fix SummonDoodad issues from Skill 15343, spawns Recovered Treasure Chest ( 3483 )
-                if (targetCaster is SkillCastPositionTarget)
-                {
-                    break;
-                }
             }
         }
 
