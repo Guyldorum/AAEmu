@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Text;
 using AAEmu.Game.IO;
 using NLog;
@@ -8,7 +7,7 @@ namespace AAEmu.Game.Models.CryEngine.Objects;
 
 public class ObjectsFile(string fileName)
 {
-    private static Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private const uint NodeHeaderSize = 33;
 
     public string FileName { get; init; } = fileName;
@@ -157,14 +156,14 @@ public class ObjectsFile(string fileName)
     /// </summary>
     /// <param name="objectType"></param>
     /// <returns></returns>
-    private ObjectDataBase GetPrefabReader(int objectType)
+    private ObjectDataBase GetPrefabReader(ObjectDataType objectType)
     {
         switch (objectType)
         {
-            case 1: return new ObjectDataType1Brush();
-            case 6: return new ObjectDataType6Voxel();
-            case 11: return new ObjectDataType11Water();
-            case 13: return new ObjectDataType13Road();
+            case ObjectDataType.Brush: return new ObjectDataType1Brush();
+            case ObjectDataType.Voxel: return new ObjectDataType6Voxel();
+            case ObjectDataType.WaterVolume: return new ObjectDataType11Water();
+            case ObjectDataType.Road: return new ObjectDataType13Road();
             default: return new ObjectDataBase(objectType);
         }
     }
@@ -185,25 +184,18 @@ public class ObjectsFile(string fileName)
             var startOfObjectOffset = offset;
             if (offset + 4 > blockSize)
                 break;
-            var objectType = BitConverter.ToInt32(blockData, offset);
+            var objectType = (ObjectDataType)BitConverter.ToInt32(blockData, offset);
             var prefab = GetPrefabReader(objectType);
             prefab.Name = $"{objectType}-{PrefabsList.Count}@{FileName}";
             var totalObjectSize = prefab.ReadData(blockData, startOfObjectOffset);
             if (totalObjectSize > 0)
             {
                 PrefabsList.Add(prefab);
-                /*
-                if ((FileName == "game\\worlds\\main_world\\cells\\021_008\\client\\object.dat") &&
-                    (PrefabsList.Count == 2442))
-                {
-                    // Break it
-                }
-                */
             }
             else
             {
-                Logger.Debug($"Error reading type {objectType} @ 0x{br.BaseStream.Position:X}, DataOffset: 0x{startOfObjectOffset:X} in {FileName}");
-                return false;
+                Logger.Warn($"Unknown/unreadable type {objectType} @ 0x{br.BaseStream.Position:X}, DataOffset: 0x{startOfObjectOffset:X} in {FileName} — stopping block parse");
+                break;
             }
             offset += totalObjectSize;
         }

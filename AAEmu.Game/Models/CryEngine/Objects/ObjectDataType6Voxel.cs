@@ -3,9 +3,11 @@ using System.IO.Compression;
 using System.Numerics;
 using CgfConverter.Structs;
 
+#nullable enable
+
 namespace AAEmu.Game.Models.CryEngine.Objects;
 
-public class ObjectDataType6Voxel() : ObjectDataBase(6)
+public class ObjectDataType6Voxel() : ObjectDataBase(ObjectDataType.Voxel)
 {
     public List<byte[]> ChunkData { get; set; } = [];
 
@@ -88,7 +90,7 @@ public class ObjectDataType6Voxel() : ObjectDataBase(6)
             var currentOffset = 0;
 
             // Main Header
-            var objectType = BitConverter.ToInt32(Data, currentOffset);
+            var objectType = (ObjectDataType)BitConverter.ToInt32(Data, currentOffset);
             currentOffset += 4;
             if (PrefabType != objectType)
             {
@@ -102,9 +104,9 @@ public class ObjectDataType6Voxel() : ObjectDataBase(6)
             UnknownPadding1 = BitConverter.ToInt32(Data, currentOffset); currentOffset += 4;
             CullDistance = BitConverter.ToSingle(Data, currentOffset); currentOffset += 4;
             BitMask = BitConverter.ToInt32(Data, currentOffset); currentOffset += 4;
-            ViewDistanceRatio = blockData[currentOffset]; currentOffset += 1;
-            LodRatio = blockData[currentOffset]; currentOffset += 1;
-            UnknownPadding2 = blockData[currentOffset]; currentOffset += 1;
+            ViewDistanceRatio = Data[currentOffset]; currentOffset += 1;
+            LodRatio = Data[currentOffset]; currentOffset += 1;
+            UnknownPadding2 = Data[currentOffset]; currentOffset += 1;
 
             // Voxel Header
             VoxelChunkType = BitConverter.ToInt32(Data, currentOffset); currentOffset += 4;
@@ -201,8 +203,8 @@ public class ObjectDataType6Voxel() : ObjectDataBase(6)
             return true; // Already parsed
 
         // Decompress the model data
-        var decompressionStream = new ZLibStream(new MemoryStream(CompressedModelData), CompressionMode.Decompress);
-        using (var memStream = new MemoryStream())
+        using (var input = new MemoryStream(CompressedModelData))
+        using (var decompressionStream = new ZLibStream(input, CompressionMode.Decompress))
         {
             DecompressedModelData.SetLength(0);
             decompressionStream.CopyTo(DecompressedModelData);
@@ -225,12 +227,6 @@ public class ObjectDataType6Voxel() : ObjectDataBase(6)
 
         // Process the mesh from the reader
         MeshProcessor = new VoxelMeshProcessor(MeshReader);
-        if (MeshProcessor == null)
-        {
-            // Mesh processor failed to process
-            return false;
-        }
-
         if (MeshProcessor.Process() == false)
         {
             // Mesh processor failed to process

@@ -3,13 +3,13 @@ using CgfConverter.Structs;
 
 namespace AAEmu.Game.Models.CryEngine.Objects;
 
-public class ObjectDataType1Brush() : ObjectDataBase(1)
+public class ObjectDataType1Brush() : ObjectDataBase(ObjectDataType.Brush)
 {
     public Vector3 StartPos { get; set; } = Vector3.Zero;
     public Vector3 EndPos { get; set; } = Vector3.Zero;
     public int MaterialId { get; set; }
     public int PathId { get; set; }
-    public Matrix3x4 Matrix3X4 { get; set; } = new();
+    public Matrix3x4 Matrix3X4 { get; set; }
 
     public override int ReadData(byte[] blockData, int offset)
     {

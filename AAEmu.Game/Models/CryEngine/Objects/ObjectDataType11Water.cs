@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace AAEmu.Game.Models.CryEngine.Objects;
 
-public class ObjectDataType11Water() : ObjectDataBase(11)
+public class ObjectDataType11Water() : ObjectDataBase(ObjectDataType.WaterVolume)
 {
     public override bool IsGeneric { get; protected init; } = false;
 
@@ -37,7 +37,7 @@ public class ObjectDataType11Water() : ObjectDataBase(11)
     /// <returns>Number of bytes used</returns>
     public override int ReadData(byte[] blockData, int offset)
     {
-        var objectType = BitConverter.ToInt32(blockData, offset + 0x00);
+        var objectType = (ObjectDataType)BitConverter.ToInt32(blockData, offset + 0x00);
         if (objectType != PrefabType || (offset + StartOfVariableData > blockData.Length))
         {
             // Type mismatch or not enough bytes, return as error
