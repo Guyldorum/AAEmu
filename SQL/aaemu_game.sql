@@ -93,6 +93,23 @@ CREATE TABLE IF NOT EXISTS `blocked` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
 
 
+CREATE TABLE IF NOT EXISTS `character_active_buffs` (
+  `character_id`  INT UNSIGNED NOT NULL COMMENT 'Character who owns this buff',
+  `buff_id`       INT UNSIGNED NOT NULL COMMENT 'BuffTemplate.Id from game data',
+  `caster_id`     INT UNSIGNED NOT NULL COMMENT 'Character who originally cast this buff',
+  `skill_id`      INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Source skill template ID (0 if none)',
+  `ab_level`      INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Ability level for bonus scaling',
+  `duration`      INT NOT NULL COMMENT 'Total duration in milliseconds',
+  `time_left`     INT NOT NULL COMMENT 'Remaining time in milliseconds at save',
+  `charge`        INT NOT NULL DEFAULT 0 COMMENT 'Current charge count',
+  `stack_count`   INT NOT NULL DEFAULT 1 COMMENT 'Number of stacks',
+  `real_time`     TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1=timer ticks offline, 0=timer paused offline',
+  `saved_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'UTC timestamp when buff was saved',
+  PRIMARY KEY (`character_id`, `buff_id`),
+  INDEX `idx_character_id` (`character_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Stores active buffs across player sessions';
+
+
 CREATE TABLE IF NOT EXISTS `characters` (
   `id` int unsigned NOT NULL,
   `account_id` int unsigned NOT NULL,
@@ -137,6 +154,8 @@ CREATE TABLE IF NOT EXISTS `characters` (
   `jury_point` int NOT NULL DEFAULT '0',
   `hostile_faction_kills` int NOT NULL DEFAULT '0',
   `pvp_honor` int NOT NULL DEFAULT '0',
+  `died_in_pvp` tinyint(1) NOT NULL DEFAULT '0',
+  `died_in_pvp_war_zone` tinyint(1) NOT NULL DEFAULT '0',
   `delete_request_time` datetime NOT NULL DEFAULT '0001-01-01 00:00:00',
   `transfer_request_time` datetime NOT NULL DEFAULT '0001-01-01 00:00:00',
   `delete_time` datetime NOT NULL DEFAULT '0001-01-01 00:00:00',
@@ -586,6 +605,30 @@ CREATE TABLE IF NOT EXISTS `audit_char_sus` (
 	INDEX `sus_character` (`sus_character`),
 	INDEX `sus_category` (`sus_category`)
 )
+COLLATE='utf8mb4_general_ci'
+ENGINE=InnoDB
+;
+
+CREATE TABLE IF NOT EXISTS `crime` (
+	`id` INT UNSIGNED NOT NULL DEFAULT '0' COMMENT 'Crime point Id',
+	`criminal` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Player Id of the criminal',
+	`victim` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Player Id of the victim',
+	`reporter` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Player Id of the reporter',
+	`crime_type` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Crime Type Id',
+	`doodad_template` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Related doodad template',
+	`zone_key` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Zone group Id of where the crime happened',
+	`x` FLOAT NULL DEFAULT '0',
+	`y` FLOAT NULL DEFAULT '0',
+	`z` FLOAT NULL DEFAULT '0',
+	`crime_time` DATETIME NULL DEFAULT NULL,
+	`report_time` DATETIME NULL DEFAULT NULL,
+	`arg1` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Argument1 of reported crime',
+	`arg2` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Argument2 of reported crime',
+	`arg3` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Argument3 of reported crime',
+	`msg` TEXT NULL DEFAULT NULL COLLATE 'utf8mb4_general_ci',
+	PRIMARY KEY (`id`) USING BTREE
+)
+COMMENT='Keeps track of the crime events'
 COLLATE='utf8mb4_general_ci'
 ENGINE=InnoDB
 ;
