@@ -12,23 +12,43 @@ using NLog;
 namespace AAEmu.Game.GameData;
 
 [GameData]
+// ReSharper disable once ClassNeverInstantiated.Global
 public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
-    private Dictionary<uint, List<NpcSkill>> _skillsForNpc = [];
-    private Dictionary<uint, List<NpcPassiveBuff>> _passivesForNpc = [];
-    public Dictionary<uint, NpcSpawnerNpc> _npcSpawnerTemplateNpcs = [];      // Id, nsn
-    public Dictionary<uint, NpcSpawnerTemplate> _npcSpawnerTemplates = [];    // NpcSpawnerTemplateId, template
-    public Dictionary<uint, List<uint>> _npcMemberAndSpawnerTemplateIds = []; // memberId, List<npcSpawnerId>
+    /// <summary>
+    /// List of skill for NpcTemplateIds
+    /// </summary>
+    private Dictionary<uint, List<NpcSkill>> SkillsForNpc { get; } = [];
+    /// <summary>
+    /// Passive buffs for NpcTemplateid
+    /// </summary>
+    private Dictionary<uint, List<NpcPassiveBuff>> PassivesForNpc { get; } = [];
+    /// <summary>
+    /// List of NpcSpawnerNpcs by NpcSpawnerId
+    /// </summary>
+    private Dictionary<uint, NpcSpawnerNpc> NpcSpawnerTemplateNpcs { get; } = [];
+    /// <summary>
+    /// List of NpcSpawnerTemplates by Id
+    /// </summary>
+    private Dictionary<uint, NpcSpawnerTemplate> NpcSpawnerTemplates { get; } = [];
+    /// <summary>
+    /// List of SpawnerTemplateIds grouped by NpcTempalteId
+    /// </summary>
+    private Dictionary<uint, List<uint>> NpcMemberAndSpawnerTemplateIds { get; } = [];
 
+    /// <summary>
+    /// Loads static Npc related data
+    /// </summary>
+    /// <param name="connection"></param>
     public void Load(SqliteConnection connection)
     {
-        _skillsForNpc = [];
-        _passivesForNpc = [];
-        _npcSpawnerTemplateNpcs = [];
-        _npcSpawnerTemplates = [];
-        _npcMemberAndSpawnerTemplateIds = [];
+        SkillsForNpc.Clear();
+        PassivesForNpc.Clear();
+        NpcSpawnerTemplateNpcs.Clear();
+        NpcSpawnerTemplates.Clear();
+        NpcMemberAndSpawnerTemplateIds.Clear();
 
         using (var command = connection.CreateCommand())
         {
@@ -49,10 +69,10 @@ public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
                     SkillUseParam2 = reader.GetFloat("skill_use_param2")
                 };
 
-                if (!_skillsForNpc.ContainsKey(template.OwnerId))
-                    _skillsForNpc.Add(template.OwnerId, []);
+                if (!SkillsForNpc.ContainsKey(template.OwnerId))
+                    SkillsForNpc.Add(template.OwnerId, []);
 
-                _skillsForNpc[template.OwnerId].Add(template);
+                SkillsForNpc[template.OwnerId].Add(template);
             }
         }
 
@@ -72,10 +92,10 @@ public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
                     PassiveBuffId = reader.GetUInt32("passive_buff_id")
                 };
 
-                if (!_passivesForNpc.ContainsKey(template.OwnerId))
-                    _passivesForNpc.Add(template.OwnerId, []);
+                if (!PassivesForNpc.ContainsKey(template.OwnerId))
+                    PassivesForNpc.Add(template.OwnerId, []);
 
-                _passivesForNpc[template.OwnerId].Add(template);
+                PassivesForNpc[template.OwnerId].Add(template);
             }
         }
 
@@ -107,7 +127,7 @@ public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
                     SpawnDelayMax = reader.GetFloat("spawn_delay_max"),
                     Npcs = []
                 };
-                _npcSpawnerTemplates.Add(template.Id, template);
+                NpcSpawnerTemplates.Add(template.Id, template);
             }
         }
 
@@ -128,109 +148,137 @@ public class NpcGameData : Singleton<NpcGameData>, IGameDataLoader
                     Weight = reader.GetFloat("weight")
                 };
 
-                _npcSpawnerTemplateNpcs.Add(nsn.Id, nsn);
-                _npcSpawnerTemplates[nsn.NpcSpawnerTemplateId].Npcs.Add(nsn);
+                NpcSpawnerTemplateNpcs.Add(nsn.Id, nsn);
+                NpcSpawnerTemplates[nsn.NpcSpawnerTemplateId].Npcs.Add(nsn);
             }
         }
     }
 
+    /// <summary>
+    /// Process data after all other data has been loaded
+    /// </summary>
     public void PostLoad()
     {
-        foreach (var (templateId, skills) in _skillsForNpc)
+        foreach (var (templateId, skills) in SkillsForNpc)
         {
             NpcManager.Instance.BindSkillsToTemplate(templateId, skills);
         }
 
-        foreach (var passiveBuff in _passivesForNpc.Values.SelectMany(i => i))
+        foreach (var passiveBuff in PassivesForNpc.Values.SelectMany(i => i))
         {
             if (passiveBuff.PassiveBuff != null)
                 continue;
             passiveBuff.PassiveBuff = SkillManager.Instance.GetPassiveBuffTemplate(passiveBuff.PassiveBuffId);
         }
 
-        foreach (var (templateId, passives) in _passivesForNpc)
+        foreach (var (templateId, passives) in PassivesForNpc)
         {
             var template = NpcManager.Instance.GetTemplate(templateId);
             template?.PassiveBuffs.AddRange(passives);
         }
 
-        // Phase 4A3 fix : HM avait supprime cet appel a tort. Sans lui,
-        // _npcMemberAndSpawnerTemplateIds reste vide -> GetSpawnerIds()
-        // retourne null pour tous les NPCs -> branche FAKE de
-        // SpawnManager.AddNpcSpawner attribue template id=1 (radius minable)
-        // -> NPCs jamais actives par ActiveRegionTick (filter IsSpawnerActive).
-        // L'appel a ete deplace dans NpcManager.cs:772 mais ne fonctionne
-        // pas en pratique (ordre d'init incorrect).
         LoadMemberAndSpawnerTemplateIds();
     }
 
-    public void LoadMemberAndSpawnerTemplateIds()
+    /// <summary>
+    /// Creates a cahced list of NpcSpawners by NpcTemplateId
+    /// </summary>
+    private void LoadMemberAndSpawnerTemplateIds()
     {
-        _npcMemberAndSpawnerTemplateIds = [];
-        var npcMemberAndSpawnerId = new Dictionary<uint, List<uint>>();
+        NpcMemberAndSpawnerTemplateIds.Clear();
 
-        foreach (var nsn in _npcSpawnerTemplateNpcs.Values)
+        foreach (var (_, npcSpawnerNpc) in NpcSpawnerTemplateNpcs)
         {
-            if (!_npcMemberAndSpawnerTemplateIds.TryGetValue(nsn.MemberId, out var value))
+            if (!NpcMemberAndSpawnerTemplateIds.TryGetValue(npcSpawnerNpc.MemberId, out var value))
             {
-                _npcMemberAndSpawnerTemplateIds.Add(nsn.MemberId, [nsn.NpcSpawnerTemplateId]);
+                NpcMemberAndSpawnerTemplateIds.Add(npcSpawnerNpc.MemberId, [npcSpawnerNpc.NpcSpawnerTemplateId]);
             }
             else
             {
-                value.Add(nsn.NpcSpawnerTemplateId);
+                value.Add(npcSpawnerNpc.NpcSpawnerTemplateId);
             }
         }
 
         Logger.Info($"[Phase4Diag3] LoadMemberAndSpawnerTemplateIds done: " +
-                    $"_npcSpawnerTemplateNpcs.Count={_npcSpawnerTemplateNpcs.Count}, " +
-                    $"_npcMemberAndSpawnerTemplateIds.Count={_npcMemberAndSpawnerTemplateIds.Count}");
+                    $"NpcSpawnerTemplateNpcs.Count={NpcSpawnerTemplateNpcs.Count}, " +
+                    $"NpcMemberAndSpawnerTemplateIds.Count={NpcMemberAndSpawnerTemplateIds.Count}");
     }
 
+    /// <summary>
+    /// Gets a list of SpawnerIds for a given NpcTemplateId
+    /// </summary>
+    /// <param name="memberId"></param>
+    /// <returns></returns>
     public List<uint> GetSpawnerIds(uint memberId)
     {
-        _npcMemberAndSpawnerTemplateIds.TryGetValue(memberId, out var list);
-
-        return list;
+        return NpcMemberAndSpawnerTemplateIds.GetValueOrDefault(memberId);
     }
 
+    /// <summary>
+    /// Returns a NpcSpawnerTemplate for a given Id
+    /// </summary>
+    /// <param name="npcSpawnerTemplateId"></param>
+    /// <returns></returns>
     public NpcSpawnerTemplate GetNpcSpawnerTemplate(uint npcSpawnerTemplateId)
     {
-        _npcSpawnerTemplates.TryGetValue(npcSpawnerTemplateId, out var template);
-
-        return template;
+        return NpcSpawnerTemplates.GetValueOrDefault(npcSpawnerTemplateId);
     }
 
+    /// <summary>
+    /// Rturns the first NpcSpawnerNpc from a given NpcSpawnerTemplateId
+    /// </summary>
+    /// <param name="spawnerId"></param>
+    /// <returns></returns>
     public NpcSpawnerNpc GetNpcSpawnerNpc(uint spawnerId)
     {
-        //_npcSpawnerTemplateNpcs.TryGetValue(spawnerId, out var nsn);
-        return _npcSpawnerTemplateNpcs.Values.FirstOrDefault(nsn => nsn.NpcSpawnerTemplateId == spawnerId);
+        return NpcSpawnerTemplateNpcs.Values.FirstOrDefault(nsn => nsn.NpcSpawnerTemplateId == spawnerId);
     }
 
+    /// <summary>
+    /// Gets Non-Player skills list for a given NpcTempalte and situational trigger/condition
+    /// </summary>
+    /// <param name="npcId"></param>
+    /// <param name="skillCondition"></param>
+    /// <returns></returns>
     public List<NpcSkill> GetNpSkills(uint npcId, SkillUseConditionKind skillCondition = SkillUseConditionKind.None)
     {
-        if (_skillsForNpc.TryGetValue(npcId, out var value))
+        if (SkillsForNpc.TryGetValue(npcId, out var value))
         {
             if (skillCondition == SkillUseConditionKind.None)
-                return _skillsForNpc[npcId];
+                return SkillsForNpc[npcId];
             return value.Where(npSkill => npSkill.SkillUseCondition == skillCondition).ToList();
         }
 
         return null;
     }
 
+    /// <summary>
+    /// Register a NpcSpawnerTemplate
+    /// </summary>
+    /// <param name="template"></param>
     public void AddNpcSpawner(NpcSpawnerTemplate template)
     {
-        _npcSpawnerTemplates.Add(template.Id, template);
+        NpcSpawnerTemplates.Add(template.Id, template);
     }
+
+    /// <summary>
+    /// Regsiters a NpcSpawnerNpc into cache
+    /// </summary>
+    /// <param name="nsn"></param>
     public void AddNpcSpawnerNpc(NpcSpawnerNpc nsn)
     {
-        _npcSpawnerTemplateNpcs.Add(nsn.Id, nsn);
+        NpcSpawnerTemplateNpcs.Add(nsn.Id, nsn);
     }
+
+    /// <summary>
+    /// Registers a NpcSpawnerNpc to the cache of Npcs
+    /// </summary>
+    /// <param name="nsn"></param>
     public void AddMemberAndSpawnerTemplateIds(NpcSpawnerNpc nsn)
     {
-        if (!_npcMemberAndSpawnerTemplateIds.ContainsKey(nsn.MemberId))
-            _npcMemberAndSpawnerTemplateIds.Add(nsn.MemberId, [nsn.NpcSpawnerTemplateId]);
+        if (!NpcMemberAndSpawnerTemplateIds.TryGetValue(nsn.MemberId, out var npcMemberAndSpawnerTemplate))
+            NpcMemberAndSpawnerTemplateIds.Add(nsn.MemberId, [nsn.NpcSpawnerTemplateId]);
         else
-            _npcMemberAndSpawnerTemplateIds[nsn.MemberId].Add(nsn.NpcSpawnerTemplateId);
+            npcMemberAndSpawnerTemplate.Add(nsn.NpcSpawnerTemplateId);
     }
 }
