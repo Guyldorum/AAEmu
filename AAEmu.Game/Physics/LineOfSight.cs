@@ -132,8 +132,16 @@ public static class LineOfSight
         var casterSize = Math.Max(caster.ModelSize, 0.5f) * Math.Max(caster.Scale, 0.5f);
         var targetSize = Math.Max(target.ModelSize, 0.5f) * Math.Max(target.Scale, 0.5f);
 
-        var eye = casterPos with { Z = casterPos.Z + casterSize * 1.5f };
-        var torso = targetPos with { Z = targetPos.Z + targetSize * 0.75f };
+        // Minimums absolus : un humanoïde standard fait ~2m, donc oeil à 1.5m
+        // et chest/torse à 1.0m. Sans ces planchers, les petites valeurs
+        // ModelSize*Scale (~0.5 pour un Character) donnent un ray qui vole à
+        // 0.5-0.7m du sol et se fait bloquer par des obstacles de 30cm
+        // (steps, planters, bordures de cour intérieure).
+        var casterEyeOffset = Math.Max(casterSize * 1.5f, 1.5f);
+        var targetTorsoOffset = Math.Max(targetSize * 1.0f, 1.0f);
+
+        var eye = casterPos with { Z = casterPos.Z + casterEyeOffset };
+        var torso = targetPos with { Z = targetPos.Z + targetTorsoOffset };
 
         return TestLine(world, eye, torso, out hit);
     }
