@@ -69,8 +69,25 @@ public class TestNavMesh : ICommand
         messageOutput.SendMessage($"Closest to {npc.Transform.World.Position} -> {pos}");
         var watch = new Stopwatch();
         watch.Start();
-        var foundPath = npc.FindPath(character).ToList();
-        // var foundPath = npc.Ai.PathNode.FindPath(npc.ParentWorld, npc.Transform.World.Position, character.Transform.World.Position, out var hasDifferentNodeTypes).ToList();
+        // 5b diag: sub-command 'astar' switches to PathNode.FindPath (A* on NetMission)
+        // for visual comparison with default FindPath2 (greedy forbidden-area path).
+        // ClearMarkers() at start of Execute lets you alternate commands at same point.
+        var useAstar = args.Length > 0 && string.Equals(args[0], "astar", System.StringComparison.OrdinalIgnoreCase);
+        List<Vector3> foundPath;
+        if (useAstar)
+        {
+            npc.Ai.PathNode.ZoneKey = character.Transform.ZoneId;
+            foundPath = npc.Ai.PathNode.FindPath(
+                npc.ParentWorld,
+                npc.Transform.World.Position,
+                character.Transform.World.Position,
+                out _).ToList();
+            messageOutput.SendMessage("Using A* (PathNode.FindPath on NetMission)");
+        }
+        else
+        {
+            foundPath = npc.FindPath(character).ToList();
+        }
         watch.Stop();
         messageOutput.SendMessage($"FindPath Took {watch.ElapsedMilliseconds}ms");
         foundPath.Insert(0, npc.Transform.World.Position);
