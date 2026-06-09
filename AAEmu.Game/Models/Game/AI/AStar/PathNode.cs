@@ -71,115 +71,127 @@ public class PathNode
     public byte NodeType { get; set; }
 
     /// <summary>
-    /// Basic method of route calculation.
+    /// A* on the NetMission graph (lot-5b.c rewrite).
+    /// Returns waypoints from start to goal, with goalLocation appended for final approach.
     /// </summary>
-    /// <param name="world"></param>
-    /// <param name="goalLocation"></param>
-    /// <param name="containsDifferentNodeTypes"></param>
-    /// <param name="startLocation"></param>
-    /// <returns></returns>
     public List<Vector3> FindPath(WorldInstance world, Vector3 startLocation, Vector3 goalLocation, out bool containsDifferentNodeTypes)
     {
         containsDifferentNodeTypes = false;
-        var startNodeType = 2;
-        // Find the nearest point from the start point in the list of geodata points and start the search from it.
-        var posStart = world.Template.GeoData.FindСlosestToTheCurrent(ZoneKey, startLocation, 0);
-        if ((posStart != null && (posStart.Pos - startLocation).Length() < 5f))
-        {
-            startNodeType = posStart.Type;
-        }
-        else
-        {
-            posStart = new NodeDescriptor(null) { Pos = startLocation with { Z = world.GetHeight(startLocation) }};
-        }
-        var posEnd = world.Template.GeoData.FindСlosestToTheCurrent(ZoneKey, goalLocation, 0);
-        //if (posEnd != null)
-        //    goal = posEnd.Pos;// replace it with the nearest point from the geodata
 
-        if ((posEnd != null && (posEnd.Pos - goalLocation).Length() < 5f))
-        {
-            if (posEnd.Type != startNodeType)
-                containsDifferentNodeTypes = true;
-        }
-        else
-        {
-            posEnd = new NodeDescriptor(null) { Pos = goalLocation with { Z = world.GetHeight(goalLocation) }};
-            if (startNodeType != 2)
-                containsDifferentNodeTypes = true;
-        }
+        // Resolve start and end as actual NetMission nodes (the closest one to each query position).
+        var posStart = world.Template.GeoData.FindСlosestToTheCurrent(ZoneKey, startLocation, 0);
+        var posEnd = world.Template.GeoData.FindСlosestToTheCurrent(ZoneKey, goalLocation, 0);
+        if (posStart == null || posEnd == null)
+            return [];
+
+        if (posStart.Type != posEnd.Type)
+            containsDifferentNodeTypes = true;
 
         EndPointPos = posEnd.Pos;
-        var rawDistance = Vector3.Distance(startLocation, goalLocation);
 
-        // Step 1.
-        var closedSet = new Collection<PathNode>();
-        var openSet = new Collection<PathNode>();
-
-        // Step 2.
-        var startNode = new PathNode
+        // Trivial case: same node.
+        if (posStart.Id == posEnd.Id)
         {
-            CurrentTargetPos = posStart.Pos,
-            Position = startLocation,
-            EndPointPos = goalLocation,
-            CameFrom = null,
-            PathLengthFromStart = 0,
-            PathLengthToEnd = (startLocation - EndPointPos).Length2D(), // GetHeuristicPathLength(startLocation),
-            NodeType = posStart.Type
+            Position = posStart.Pos;
+            CurrentTargetPos = Vector3.Zero;
+            return [posStart.Pos, goalLocation];
+        }
+
+        // A* state. Keys are NetMission node Ids (int, promoted to long for Dict<long,...>).
+        var gScore = new Dictionary<long, float> { [posStart.Id] = 0f };
+        var cameFrom = new Dictionary<long, long>();
+        var nodes = new Dictionary<long, NodeDescriptor>
+        {
+            [posStart.Id] = posStart,
+            [posEnd.Id] = posEnd
         };
-        openSet.Add(startNode);
+        var openSet = new HashSet<long> { posStart.Id };
+        var closedSet = new HashSet<long>();
 
-        var maxLoopsLeft = (int)MathF.Ceiling(rawDistance * 10) + 50; // This is to prevent the pathfinder from traveling too far off
-        while (openSet.Count > 0)
+        // Iteration cap: scales with raw distance but bounded. Each hop ~ a few meters on the
+        // NetMission, so 5 hops/m is generous; min 500, max 5000.
+        var rawDistance = Vector3.Distance(posStart.Pos, posEnd.Pos);
+        var maxIterations = (int)Math.Min(5000.0, Math.Max(500.0, rawDistance * 5.0 + 200.0));
+        var iterations = 0;
+
+        while (openSet.Count > 0 && iterations++ < maxIterations)
         {
-            maxLoopsLeft--;
-
-            // Step 3.
-            var currentNode = openSet.OrderBy(node => node.EstimateFullPathLength).First();
-
-            // Step 4.
-            if (currentNode.Position.Equals(goalLocation) || maxLoopsLeft <= 0)
+            // Pick the node in openSet with the lowest F = G + H. Linear scan; openSet stays small.
+            long currentId = -1;
+            var bestF = float.MaxValue;
+            foreach (var id in openSet)
             {
-                var result = GetPathForNode(currentNode, out containsDifferentNodeTypes);
-                // Leave the nearest point taken from geodata instead of the point from where we are going
-                // result[0] = pos1; // replace the first and the last point with the real one
-                // result[^1] = pos2;
-                // Let's add the target coordinates to the found points
-                result.Add(EndPointPos);
-                result = AiGeoDataManager.DouglasPeuckerReduction(result, 2.0);
-                Position = result[0];
-                CurrentTargetPos = Vector3.Zero;
-                return result;
+                var nDesc = nodes[id];
+                var h = Vector3.Distance(nDesc.Pos, posEnd.Pos);
+                var f = gScore[id] + h;
+                if (f < bestF)
+                {
+                    bestF = f;
+                    currentId = id;
+                }
             }
 
-            // Step 5.
-            openSet.Remove(currentNode);
-            closedSet.Add(currentNode);
-
-            // Step 6.
-            foreach (var neighbourNode in GetNeighbours(world, currentNode))
+            // Goal reached: reconstruct path from cameFrom chain.
+            if (currentId == posEnd.Id)
             {
-                // Step 7.
-                if (closedSet.Any(node => node.Position.Equals(neighbourNode.Position)))
+                var path = new List<Vector3>();
+                var traceId = currentId;
+                path.Add(nodes[traceId].Pos);
+                while (cameFrom.TryGetValue(traceId, out var prevId))
                 {
-                    continue;
+                    traceId = prevId;
+                    path.Add(nodes[traceId].Pos);
                 }
+                path.Reverse();
 
-                var openNode = openSet.FirstOrDefault(node => node.Position.Equals(neighbourNode.Position));
-                // Step 8.
-                if (openNode == null)
+                // Append the true goal location so the NPC finishes on the player, not on the closest node.
+                path.Add(goalLocation);
+
+                // Smooth with Douglas-Peucker (tolerance 2m).
+                path = AiGeoDataManager.DouglasPeuckerReduction(path, 2.0);
+                Position = path.Count > 0 ? path[0] : posStart.Pos;
+                CurrentTargetPos = Vector3.Zero;
+                return path;
+            }
+
+            openSet.Remove(currentId);
+            closedSet.Add(currentId);
+
+            var current = nodes[currentId];
+
+            // Outgoing edges from current node. point.NetMission?.LinkDescriptorList is the
+            // (already loaded) graph for this NetMissionReader; Where() bounds to ~5k links.
+            var links = current.NetMission?.LinkDescriptorList;
+            if (links == null) continue;
+
+            foreach (var link in links)
+            {
+                if (link.SourceNode != current.Id) continue;
+
+                var tgt = link.TargetNodeDescriptor;
+                if (tgt == null) continue;
+                if (closedSet.Contains(tgt.Id)) continue;
+
+                // Z-aware forbidden check (lot-5b.b). Note: Z of tgt.Pos is the navmesh Z,
+                // NOT overwritten by GetHeight() — preserves multi-level structures (caves,
+                // domes, upper platforms).
+                if (world.Template.GeoData.CheckImpossibleWalk(tgt.Pos)) continue;
+
+                if (!nodes.ContainsKey(tgt.Id))
+                    nodes[tgt.Id] = tgt;
+
+                var tentativeG = gScore[currentId] + Vector3.Distance(current.Pos, tgt.Pos);
+
+                if (!gScore.TryGetValue(tgt.Id, out var existingG) || tentativeG < existingG)
                 {
-                    openSet.Add(neighbourNode);
-                }
-                else if (openNode.PathLengthFromStart > neighbourNode.PathLengthFromStart)
-                {
-                    // Step 9.
-                    openNode.CameFrom = currentNode;
-                    openNode.PathLengthFromStart = neighbourNode.PathLengthFromStart;
+                    gScore[tgt.Id] = tentativeG;
+                    cameFrom[tgt.Id] = currentId;
+                    openSet.Add(tgt.Id);
                 }
             }
         }
-        // Step 10.
-        containsDifferentNodeTypes = false;
+
+        // No path within iteration budget.
         return [];
     }
 
