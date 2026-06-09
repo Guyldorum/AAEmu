@@ -136,6 +136,32 @@ public abstract class BaseCombatBehavior : Behavior
         {
             if (Ai.PathNode?.EndPointPos != null && Ai.PathNode != null)
             {
+                // 5b.h: vertical step-up snap. MoveTowards interpolates linearly in 3D,
+                // so a waypoint sitting above the NPC by a step height (~2m at the
+                // Necropole stairs) is unreachable: the upper brush blocks vertical
+                // motion while XY is already arrived. Without this snap the NPC
+                // stays stuck under the next step indefinitely (dCurr = deltaZ,
+                // constant, never trips the FindPath+Dequeue branch).
+                //
+                // When XY is arrived (distXY <= ModelSize) and deltaZ is between
+                // 0.5m and 5m, snap Z onto the waypoint. Next tick dist 3D = 0
+                // <= ModelSize, BaseCombatBehavior:142 trips, the queue advances
+                // to the waypoint further up the staircase. CryEngine 2 itself
+                // handles these transitions via smart objects (visually a small
+                // hop), so the snap is consistent with the source engine.
+                {
+                    var npcPos = Ai.Owner.Transform.World.Position;
+                    var deltaZ = Ai.PathNode.CurrentTargetPos.Z - npcPos.Z;
+                    var dx = Ai.PathNode.CurrentTargetPos.X - npcPos.X;
+                    var dy = Ai.PathNode.CurrentTargetPos.Y - npcPos.Y;
+                    var distXY = MathF.Sqrt(dx * dx + dy * dy);
+                    if (distXY <= Ai.Owner.ModelSize && deltaZ > 0.5f && deltaZ < 5f)
+                    {
+                        Ai.Owner.Transform.Local.SetPosition(
+                            new Vector3(npcPos.X, npcPos.Y, Ai.PathNode.CurrentTargetPos.Z));
+                    }
+                }
+
                 // If not at target position (take model size error margin), then calculate new target route position
                 var dist = Vector3.Distance(Ai.PathNode.CurrentTargetPos, Ai.Owner.Transform.World.Position);
                 if (dist <= Ai.Owner.ModelSize)
