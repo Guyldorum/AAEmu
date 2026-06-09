@@ -42,6 +42,24 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
             {
                 foreach (var forbiddenArea in areaMission.ForbiddenAreasList)
                 {
+                    // 5b.b: Z-aware filter. IsInPolygon is XY-only (2D raycast), so without
+                    // this skip CryEngine "roof" forbidden areas (with Z encoded vertically
+                    // in the polygon points) wrongly block ground navigation directly below
+                    // them. Tolerance 8m matches LinePassesThroughForbiddenArea maxHeightOffset.
+                    if (forbiddenArea.Points.Count > 0)
+                    {
+                        var zMin = float.MaxValue;
+                        var zMax = float.MinValue;
+                        foreach (var p in forbiddenArea.Points)
+                        {
+                            if (p.Z < zMin) zMin = p.Z;
+                            if (p.Z > zMax) zMax = p.Z;
+                        }
+                        const float zTolerance = 8f;
+                        if (point.Z < zMin - zTolerance || point.Z > zMax + zTolerance)
+                            continue;
+                    }
+
                     if (IsInPolygon(point, forbiddenArea.Points))
                         return true;
                 }
