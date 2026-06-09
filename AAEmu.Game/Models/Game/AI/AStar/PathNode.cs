@@ -89,15 +89,16 @@ public class PathNode
 
         EndPointPos = posEnd.Pos;
 
-        // Trivial case: same node. Return the NPC's actual position as the first
-        // waypoint and goalLocation as the second. CurrentTargetPos = startLocation
-        // matches the FindPath2 convention that tells BaseCombatBehavior to enter
-        // its Dequeue branch on the next tick (dist <= ModelSize).
+        // 5b.g: trivial case (same node). Return only goalLocation as the unique
+        // waypoint. CurrentTargetPos = startLocation signals BaseCombatBehavior
+        // to Dequeue (giving goalLocation) at the next tick. Including startLocation
+        // in the queue would cause the NPC to stay in the FindPath+Dequeue loop
+        // forever, never reaching MoveTowards.
         if (posStart.Id == posEnd.Id)
         {
             Position = startLocation;
             CurrentTargetPos = startLocation;
-            return [startLocation, goalLocation];
+            return [goalLocation];
         }
 
         // A* state. Keys are NetMission node Ids (int, promoted to long for Dict<long,...>).
@@ -147,10 +148,16 @@ public class PathNode
                 }
                 path.Reverse();
 
-                // Prefix with the NPC's actual position so the first waypoint isn't a
-                // navmesh node potentially behind the NPC (which would cause a backward step
-                // when Dequeue runs). DP smoothing will fuse it with posStart.Pos if close.
-                path.Insert(0, startLocation);
+                // 5b.g: drop posStart.Pos from the head of the path. It is by
+                // construction the navmesh node closest to the NPC (typically <1m
+                // away), so including it makes BaseCombatBehavior:142 stay inside
+                // the FindPath+Dequeue branch forever (dist ≤ ModelSize at every
+                // tick), never reaching MoveTowards. The path now starts at the
+                // next node along the chain (~2-4m from the NPC), which IS a
+                // viable MoveTowards target. If the path has only one node
+                // (chain of length 1), skip the drop to keep at least the goal.
+                if (path.Count > 1)
+                    path.RemoveAt(0);
 
                 // Append the true goal location so the NPC finishes on the player, not on the closest node.
                 path.Add(goalLocation);
