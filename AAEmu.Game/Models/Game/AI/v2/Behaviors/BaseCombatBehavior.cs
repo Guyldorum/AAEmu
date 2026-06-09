@@ -201,6 +201,15 @@ public abstract class BaseCombatBehavior : Behavior
 
                         // Logger.Debug($"PathDequeue");
                         Ai.PathNode.CurrentTargetPos = Ai.PathNode.FoundPath.Dequeue();
+                        // 5b.k: also move toward the new waypoint within the same tick so
+                        // each combat tick broadcasts a movement packet. Without this,
+                        // tens of consecutive ticks may dequeue silently when waypoints
+                        // are denser than range (typical for dense navmesh + melee range).
+                        // The client then only gets ~2-3 packets/sec instead of 10,
+                        // interpolates over 300-500ms between updates, and the motion
+                        // looks visibly choppy. With the extra MoveTowards we get
+                        // ~10 packets/sec and the motion is smooth.
+                        Ai.Owner.MoveTowards(Ai.PathNode.CurrentTargetPos, (float)speed, moveFlags, range);
                     }
                 }
                 else
