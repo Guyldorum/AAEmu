@@ -169,6 +169,8 @@ public abstract class BaseCombatBehavior : Behavior
                     //var stopWatch = new Stopwatch();
                     //stopWatch.Start();
                     Ai.Owner.FindPath((Unit)target);
+                    // 5b.i: save the waypoint we just left for Z interpolation.
+                    Ai.PathNode.LastWaypointPos = Ai.PathNode.CurrentTargetPos;
                     Ai.PathNode.CurrentTargetPos = Ai.PathNode.FoundPath.Dequeue();
                     //stopWatch.Stop();
                     // Toss warning if it took a long time
@@ -187,7 +189,51 @@ public abstract class BaseCombatBehavior : Behavior
                     distanceToTarget = Vector3.Distance(Ai.PathNode.CurrentTargetPos, Ai.Owner.Transform.World.Position);
                     if (distanceToTarget > range)
                     {
+                        // 5b.i: rotate model to face the next waypoint BEFORE the move
+                        // packet goes out, so the NPC visually faces where it's running
+                        // (including through staircase turns where each waypoint changes
+                        // direction). Yaw via atan2(dy, dx) in radians; convention here
+                        // matches PositionAndRotation.SetZRotation (Rotation.Z in radians).
+                        {
+                            var npcPosRot = Ai.Owner.Transform.World.Position;
+                            var rdx = Ai.PathNode.CurrentTargetPos.X - npcPosRot.X;
+                            var rdy = Ai.PathNode.CurrentTargetPos.Y - npcPosRot.Y;
+                            if (rdx * rdx + rdy * rdy > 0.001f)
+                            {
+                                Ai.Owner.Transform.Local.SetZRotation(MathF.Atan2(rdy, rdx));
+                            }
+                        }
+
                         Ai.Owner.MoveTowards(Ai.PathNode.CurrentTargetPos, (float)speed, moveFlags, range);
+
+                        // 5b.i: interpolate Z linearly between LastWaypointPos.Z and
+                        // CurrentTargetPos.Z proportional to XY progress along the segment.
+                        // Without this, MoveTowards keeps Z constant during XY travel
+                        // (since the brush of stairs blocks vertical motion) and the NPC
+                        // visually phases through staircase steps. With interpolation, Z
+                        // rises smoothly with the climb. lot-5b.h snap step-up still
+                        // ensures convergence on arrival when MoveTowards stalls.
+                        {
+                            var npcPosZ = Ai.Owner.Transform.World.Position;
+                            var lastWp = Ai.PathNode.LastWaypointPos;
+                            var currWp = Ai.PathNode.CurrentTargetPos;
+                            var lwDx = currWp.X - lastWp.X;
+                            var lwDy = currWp.Y - lastWp.Y;
+                            var distXYTotal = MathF.Sqrt(lwDx * lwDx + lwDy * lwDy);
+                            if (distXYTotal > 0.5f && distXYTotal < 100f)
+                            {
+                                var rmDx = currWp.X - npcPosZ.X;
+                                var rmDy = currWp.Y - npcPosZ.Y;
+                                var distXYRemain = MathF.Sqrt(rmDx * rmDx + rmDy * rmDy);
+                                var progress = MathF.Max(0f, MathF.Min(1f, 1f - (distXYRemain / distXYTotal)));
+                                var interpZ = lastWp.Z + (currWp.Z - lastWp.Z) * progress;
+                                if (MathF.Abs(interpZ - npcPosZ.Z) > 0.05f)
+                                {
+                                    Ai.Owner.Transform.Local.SetPosition(
+                                        new Vector3(npcPosZ.X, npcPosZ.Y, interpZ));
+                                }
+                            }
+                        }
                     }
                     else
                     {
@@ -200,6 +246,8 @@ public abstract class BaseCombatBehavior : Behavior
                         }
 
                         // Logger.Debug($"PathDequeue");
+                        // 5b.i: save the waypoint we just left for Z interpolation.
+                        Ai.PathNode.LastWaypointPos = Ai.PathNode.CurrentTargetPos;
                         Ai.PathNode.CurrentTargetPos = Ai.PathNode.FoundPath.Dequeue();
                     }
                 }
