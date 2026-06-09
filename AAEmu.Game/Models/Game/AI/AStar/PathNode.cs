@@ -34,8 +34,6 @@ public class PathNode
     /// Coordinates of the end point on the map (for the script).
     /// </summary>
     public Vector3 EndPointPos { get; set; } = Vector3.Zero;
-    // 5b.i: position of the navmesh waypoint we came from, for Z interpolation.
-    public Vector3 LastWaypointPos { get; set; } = Vector3.Zero;
 
     /// <summary>
     /// List of found points (for the script).
@@ -100,8 +98,6 @@ public class PathNode
         {
             Position = startLocation;
             CurrentTargetPos = startLocation;
-            // 5b.i: seed LastWaypointPos for Z interpolation in BaseCombatBehavior.
-            LastWaypointPos = startLocation;
             return [goalLocation];
         }
 
@@ -175,8 +171,6 @@ public class PathNode
                 // its Dequeue branch on the next tick. Vector3.Zero would point at the
                 // world origin and make the NPC march south-west until leash reset.
                 CurrentTargetPos = startLocation;
-                // 5b.i: seed LastWaypointPos for Z interpolation in BaseCombatBehavior.
-                LastWaypointPos = startLocation;
                 return path;
             }
 

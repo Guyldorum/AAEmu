@@ -1289,8 +1289,21 @@ public partial class Npc : Unit
         // TODO: Implement proper use for Transform.World.AddDistanceToFront
         var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(travelDist, targetDist, Transform.Local.Position, other);
         var targetPositionZ = ParentWorld.GetReferenceHeight(Ai, new Vector3(newX, newY, newZ), Transform.ZoneId);
-        // Move to new Z position (different if NPC is flying and trying to attack)
-        Transform.Local.SetPosition(newX, newY, (movingIntoAttackRange && (Ai?.Owner?.CanFly ?? false)) ? newZ : targetPositionZ);
+        // 5b.j: resolve step Z. In combat, take max(newZ, targetPositionZ) so the
+        // NPC can climb stairs/ledges: newZ is the linearly interpolated Z
+        // between Position.Z and other.Z (the waypoint), and Sandbox places
+        // navmesh waypoints on top of staircase steps. The brush pipeline
+        // (consulted via GetReferenceHeight) does not see those steps
+        // (raycastHit observed as 'heightmap' 100% of samples), so without
+        // the max the NPC stays glued to the heightmap floor. On flat ground
+        // newZ ≈ targetPositionZ so the max is a no-op. Flying units keep
+        // newZ raw (airborne path). Non-combat keeps targetPositionZ alone.
+        float stepZ;
+        if (movingIntoAttackRange)
+            stepZ = (Ai?.Owner?.CanFly ?? false) ? newZ : MathF.Max(newZ, targetPositionZ);
+        else
+            stepZ = targetPositionZ;
+        Transform.Local.SetPosition(newX, newY, stepZ);
 
         var angle = MathUtil.CalculateAngleFrom(Transform.Local.Position, other);
         var (velX, velY) = MathUtil.AddDistanceToFront(4000, 0, 0, (float)angle.DegToRad());
