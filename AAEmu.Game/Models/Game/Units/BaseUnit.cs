@@ -177,6 +177,16 @@ public class BaseUnit : GameObject, IBaseUnit
         return Region?.GetNeighbors()?.Any(o => (o?.Id ?? 0) == (unit.Region?.Id ?? 0)) ?? false;
     }
 
+    /// <summary>
+    /// Phase 5 — Test si cette unit a une ligne de vue dégagée vers la cible (pas de mur
+    /// ou obstacle dense entre les deux). Utilisé par le combat AI dans CanUseSkill avant
+    /// chaque tentative de cast. Cache TTL 500ms + DynamicTree O(log N) + lock partagé court.
+    /// </summary>
+    public virtual bool HasLineOfSight(BaseUnit target)
+    {
+        return AAEmu.Game.Physics.LineOfSight.HasLosCached(this, target);
+    }
+
     public override string DebugName()
     {
         if (string.IsNullOrWhiteSpace(Name))

@@ -228,7 +228,15 @@ public abstract class BaseCombatBehavior : Behavior
                 return false;
             if (Ai.Owner != null && Ai.Owner.Buffs.HasEffectsMatchingCondition(e => e.Template.Stun || e.Template.Sleep || e.Template.Silence))
                 return false;
-            return Ai.Owner != null && DateTime.UtcNow >= _delayEnd && !Ai.Owner.IsGlobalCooldownDone;
+            // Logique existante inversée en early-return (De Morgan) pour insérer le check LoS après.
+            if (Ai.Owner == null || DateTime.UtcNow < _delayEnd || Ai.Owner.IsGlobalCooldownDone)
+                return false;
+            // Phase 5 — Bloquer le cast si LoS vers la cible courante est obstruée.
+            // Cache TTL 500ms + DynamicTree O(log N) + lock court (cf. LineOfSight.HasLosCached).
+            // L'aggro reste intacte (UpdateTarget non modifié) ; le NPC continue de se déplacer.
+            if (Ai.Owner.CurrentTarget is BaseUnit losTarget && !Ai.Owner.HasLineOfSight(losTarget))
+                return false;
+            return true;
         }
     }
 

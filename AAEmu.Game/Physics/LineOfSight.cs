@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Numerics;
 
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.World;
 
+using Jitter2.Collision;
+using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
 
 namespace AAEmu.Game.Physics;
@@ -32,6 +35,59 @@ public static class LineOfSight
     /// dans le BBox englobant d'un brush (sous un toit, sur un seuil, etc.) et le raycast
     /// tape immédiatement les bords intérieurs.</summary>
     public const float MinHitLambda = 0.5f;
+
+    /// <summary>TTL du cache LoS en millisecondes. À 500ms, un NPC en combat consulte le
+    /// cache ~5 fois entre deux recalculs réels.</summary>
+    public const int CacheTtlMs = 500;
+
+    private readonly struct CacheEntry
+    {
+        public DateTime Expiry { get; init; }
+        public bool Result { get; init; }
+    }
+
+    private static readonly ConcurrentDictionary<long, CacheEntry> _losCache = new();
+
+    /// <summary>
+    /// Pre-filter pour DynamicTree.RayCast : accepte uniquement les RigidBodyShape de bodies
+    /// statiques (brushes Phase 4B5, voxels). Exclut automatiquement HeightmapTester (qui n'est
+    /// pas RigidBodyShape, géré par notre boucle heightmap dédiée) et les Slaves/ships
+    /// (IsStatic = false).
+    /// </summary>
+    private static readonly DynamicTree.RayCastFilterPre StaticObstacleFilter = proxy =>
+    {
+        if (proxy is not RigidBodyShape rbs) return false;
+        return rbs.RigidBody?.IsStatic ?? false;
+    };
+
+    /// <summary>
+    /// Variante cachée + lock-safe de TestUnits, conçue pour être appelée à haute fréquence
+    /// (combat AI tick). Le cache (TTL 500ms par paire ObjId) limite les vrais raycasts à
+    /// ~2x/sec/paire ; combiné au DynamicTree (O(log N)), l'impact sur le PhysicsThread est
+    /// négligeable.
+    /// Bypass cache si l'un des ObjId est 0 (sécurité).
+    /// </summary>
+    public static bool HasLosCached(AAEmu.Game.Models.Game.Units.BaseUnit caster,
+                                    AAEmu.Game.Models.Game.Units.BaseUnit target)
+    {
+        if (caster == null || target == null) return true;
+        if (caster.ObjId == 0 || target.ObjId == 0)
+            return TestUnits(caster, target, out _);
+
+        var key = ((long)caster.ObjId << 32) | target.ObjId;
+        var now = DateTime.UtcNow;
+
+        if (_losCache.TryGetValue(key, out var entry) && entry.Expiry > now)
+            return entry.Result;
+
+        var result = TestUnits(caster, target, out _);
+        _losCache[key] = new CacheEntry
+        {
+            Expiry = now.AddMilliseconds(CacheTtlMs),
+            Result = result
+        };
+        return result;
+    }
 
     /// <summary>
     /// Test LoS entre 2 points AAEmu (Z-up). Retourne true si dégagé.
@@ -68,9 +124,11 @@ public static class LineOfSight
             }
         }
 
-        // 2) Brushes raycast (Jitter2)
+        // 2) Brushes/voxels raycast via Jitter2 DynamicTree (broad-phase BVH).
+        //    O(log N) au lieu de O(N) sur 15000+ shapes. Sous lock partagé court (~µs).
+        //    Le pre-filter StaticObstacleFilter exclut Slaves (dynamic) et HeightmapTester.
         var physics = world.Physics;
-        if (physics?.BrushObjects != null && physics.BrushObjects.Count > 0)
+        if (physics?.PhysWorld?.DynamicTree != null)
         {
             // AAEmu Z-up → Jitter2 Y-up : (X, Y, Z) → (X, Z, Y)
             var jOrigin = new JVector(from.X, from.Z, from.Y);
@@ -79,19 +137,17 @@ public static class LineOfSight
             float minLambda = float.MaxValue;
             bool hitFound = false;
 
-            foreach (var brush in physics.BrushObjects.ToArray())
+            lock (physics.WorldLock)
             {
-                foreach (var brushShape in brush.Shapes)
+                if (physics.PhysWorld.DynamicTree.RayCast(jOrigin, jDirNorm, distance,
+                        StaticObstacleFilter, null,
+                        out _, out _, out var rayLambda))
                 {
-                    if (brushShape.RayCast(jOrigin, jDirNorm, out _, out var lambda))
+                    // lambda > MinHitLambda : filtre self-collision (caster dans un BBox brush)
+                    if (rayLambda > MinHitLambda)
                     {
-                        // lambda > MinHitLambda : filtre self-collision (caster dans un BBox brush)
-                        // lambda < distance     : le hit doit être avant la cible
-                        if (lambda > MinHitLambda && lambda < distance && lambda < minLambda)
-                        {
-                            minLambda = lambda;
-                            hitFound = true;
-                        }
+                        minLambda = rayLambda;
+                        hitFound = true;
                     }
                 }
             }

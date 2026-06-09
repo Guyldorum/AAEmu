@@ -84,6 +84,16 @@ public class PhysicsManager
 
     // ReSharper disable once ChangeFieldTypeToSystemThreadingLock
     private readonly object _worldLock = new();
+
+    /// <summary>
+    /// Phase 5 — Exposed for external readers (LoS raycast, future diag tools) that need
+    /// to coordinate with the physics thread (PhysWorld.Step) and async cell loading
+    /// (BrushObjects.Add) to avoid races on DynamicTree iteration.
+    /// Acquire via 'lock (physicsManager.WorldLock)' only for short read-only operations
+    /// (typically DynamicTree.RayCast which is O(log N) microseconds) ; writes are still
+    /// done internally through _pendingActions queue.
+    /// </summary>
+    public object WorldLock => _worldLock;
     private readonly List<RigidBody> _bodies = [];
     public List<RigidBody> VoxelObjects { get; init; } = [];
     public List<RigidBody> BrushObjects { get; init; } = [];
