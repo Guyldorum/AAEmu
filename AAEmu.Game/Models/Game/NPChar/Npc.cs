@@ -1594,7 +1594,11 @@ public partial class Npc : Unit
         return pathPoints;
     }
     
-    public List<Vector3> FindPath(Unit abuser) => FindPath2(abuser);
+    // 5b.d: combat path planning switched to FindPath1 (A* on NetMission) following
+    // lot-5b.b (Z-aware CheckImpossibleWalk) and lot-5b.c (proper A* rewrite).
+    // FindPath2 (greedy forbidden-area contouring) is kept defined above as dormant
+    // fallback; revert this line to restore the previous behaviour if needed.
+    public List<Vector3> FindPath(Unit abuser) => FindPath1(abuser);
 
     /// <summary>
     /// Runs parent spawner's DoDeSpawn
