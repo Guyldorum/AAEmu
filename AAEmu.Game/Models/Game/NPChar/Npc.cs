@@ -1594,11 +1594,24 @@ public partial class Npc : Unit
         return pathPoints;
     }
     
-    // 5b.d: combat path planning switched to FindPath1 (A* on NetMission) following
-    // lot-5b.b (Z-aware CheckImpossibleWalk) and lot-5b.c (proper A* rewrite).
-    // FindPath2 (greedy forbidden-area contouring) is kept defined above as dormant
-    // fallback; revert this line to restore the previous behaviour if needed.
-    public List<Vector3> FindPath(Unit abuser) => FindPath1(abuser);
+    // 5b.f: bypass FindPath1's ReducePath stage. ReducePath validates straight-line
+    // shortcuts via LinePassesThroughForbiddenArea, which only consults
+    // ForbiddenAreasList — not NavigationModifiers where PNJ building walls
+    // (e.g. Necropole dome BID=70) are encoded. Shortcuts thus traverse walls.
+    // The raw A* path follows the NetMission graph which Sandbox generated
+    // with those obstacles accounted for. FindPath1/FindPath2 left as dormant
+    // fallbacks above.
+    public List<Vector3> FindPath(Unit abuser)
+    {
+        var start = Ai.Owner.Transform.World.Position;
+        var goal = abuser.Transform.World.Position;
+        Ai.PathNode.ZoneKey = Ai.Owner.Transform.ZoneId;
+        Ai.PathNode.StartPointPos = start;
+        Ai.PathNode.EndPointPos = goal;
+        var path = Ai.PathNode.FindPath(Ai.Owner.ParentWorld, start, goal, out _);
+        Ai.PathNode.FoundPath = new Queue<Vector3>(path);
+        return path;
+    }
 
     /// <summary>
     /// Runs parent spawner's DoDeSpawn

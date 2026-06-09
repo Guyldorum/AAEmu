@@ -155,8 +155,10 @@ public class PathNode
                 // Append the true goal location so the NPC finishes on the player, not on the closest node.
                 path.Add(goalLocation);
 
-                // Smooth with Douglas-Peucker (tolerance 2m).
-                path = AiGeoDataManager.DouglasPeuckerReduction(path, 2.0);
+                // 5b.f: no Douglas-Peucker reduction. The NetMission graph was already
+                // designed with obstacles in mind by Sandbox; reducing the path
+                // post-hoc creates straight-line shortcuts that can cut through
+                // building walls (BIDs in NavigationModifiers, invisible to DP).
                 Position = startLocation;
                 // BaseCombatBehavior:140 expects CurrentTargetPos near NPC.pos to trigger
                 // its Dequeue branch on the next tick. Vector3.Zero would point at the
