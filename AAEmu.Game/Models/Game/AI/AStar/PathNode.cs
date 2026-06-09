@@ -89,12 +89,15 @@ public class PathNode
 
         EndPointPos = posEnd.Pos;
 
-        // Trivial case: same node.
+        // Trivial case: same node. Return the NPC's actual position as the first
+        // waypoint and goalLocation as the second. CurrentTargetPos = startLocation
+        // matches the FindPath2 convention that tells BaseCombatBehavior to enter
+        // its Dequeue branch on the next tick (dist <= ModelSize).
         if (posStart.Id == posEnd.Id)
         {
-            Position = posStart.Pos;
-            CurrentTargetPos = Vector3.Zero;
-            return [posStart.Pos, goalLocation];
+            Position = startLocation;
+            CurrentTargetPos = startLocation;
+            return [startLocation, goalLocation];
         }
 
         // A* state. Keys are NetMission node Ids (int, promoted to long for Dict<long,...>).
@@ -144,13 +147,21 @@ public class PathNode
                 }
                 path.Reverse();
 
+                // Prefix with the NPC's actual position so the first waypoint isn't a
+                // navmesh node potentially behind the NPC (which would cause a backward step
+                // when Dequeue runs). DP smoothing will fuse it with posStart.Pos if close.
+                path.Insert(0, startLocation);
+
                 // Append the true goal location so the NPC finishes on the player, not on the closest node.
                 path.Add(goalLocation);
 
                 // Smooth with Douglas-Peucker (tolerance 2m).
                 path = AiGeoDataManager.DouglasPeuckerReduction(path, 2.0);
-                Position = path.Count > 0 ? path[0] : posStart.Pos;
-                CurrentTargetPos = Vector3.Zero;
+                Position = startLocation;
+                // BaseCombatBehavior:140 expects CurrentTargetPos near NPC.pos to trigger
+                // its Dequeue branch on the next tick. Vector3.Zero would point at the
+                // world origin and make the NPC march south-west until leash reset.
+                CurrentTargetPos = startLocation;
                 return path;
             }
 
