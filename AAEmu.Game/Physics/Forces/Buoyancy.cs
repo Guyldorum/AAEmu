@@ -215,8 +215,41 @@ public class Buoyancy : ForceGenerator
             if (slave.ShipController == null || slave.ShipController.ShipModel.Mass <= 0)
                 continue;
 
-            // Skip simulation if still summoning
-            body.AffectedByGravity = slave.SpawnTime.AddSeconds(slave.Template.PortalTime) <= DateTime.UtcNow;
+            // [lot-10.1.1 SPAWNDIAG] Track 15s from spawn covering PortalTime + post.
+            // Logged BEFORE the AffectedByGravity early-return so PortalTime drift is observable.
+            var timeSinceSpawn = (DateTime.UtcNow - slave.SpawnTime).TotalSeconds;
+            var portalDuration = slave.Template.PortalTime;
+            var inPortal = timeSinceSpawn < portalDuration;
+
+            if (timeSinceSpawn < 15.0)
+            {
+                var localOceanLvl = WaterSurfaceLevel;
+                var localCenter = body.Position;
+                if (_fluidArea != null && _fluidArea(ref localCenter))
+                {
+                    localOceanLvl = slave.CachedWaterSurface;
+                }
+                var localDepth = Math.Max(0, localOceanLvl - body.Position.Y);
+                var phaseTag = inPortal ? "PORTAL" : "ACTIVE";
+                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} t={timeSinceSpawn:F3}s phase={phaseTag} posY={body.Position.Y:F3} ocean={localOceanLvl:F3} depth={localDepth:F3} velY={body.Velocity.Y:F3}");
+            }
+
+            // [lot-10.1.1] Corrective snap at the exact frame AffectedByGravity flips false->true.
+            // Compensates for drift during PortalTime (runtime observed: ~14m descent on clipper).
+            // Resets position to buoyancy equilibrium and zeros velocities -> no catapult.
+            var wasAffected = body.AffectedByGravity;
+            body.AffectedByGravity = !inPortal;
+            if (!wasAffected && body.AffectedByGravity)
+            {
+                var draft = 1f / (Density * ShipWaterDensityMul);
+                var preSnapY = body.Position.Y;
+                var snappedPos = body.Position;
+                snappedPos.Y = WaterSurfaceLevel - draft;
+                body.Position = snappedPos;
+                body.Velocity = JVector.Zero;
+                body.AngularVelocity = JVector.Zero;
+                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} POST-PORTAL CORRECTIVE SNAP: preSnapY={preSnapY:F3} -> snappedY={snappedPos.Y:F3} (ocean={WaterSurfaceLevel:F3} draft={draft:F3}) velocities zeroed");
+            }
             if (!body.AffectedByGravity)
             {
                 continue;
