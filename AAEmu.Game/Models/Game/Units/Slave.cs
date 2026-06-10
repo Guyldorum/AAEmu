@@ -838,13 +838,21 @@ public class Slave : Unit
                         newDoodad.PlantTime = DateTime.UtcNow;
                         newDoodad.Faction = FactionManager.Instance.GetFaction(FactionsEnum.Friendly);
 
-                        var floor = ParentWorld.GetHeight(newDoodad.Transform.World.Position); // WorldManager.Instance.GetHeight(newDoodad.Transform);
-                        var surface = WorldManager.Instance.GetWorld(doodad.Transform.InstanceId)?.Water?.GetWaterSurface(newDoodad.Transform.World.Position, out _) ?? 0f;
-                        var depth = surface - floor;
-
-                        // It seems that when the water is deep, drops to the water surface, otherwise, it sinks to the floor
-                        // Requires more testing, possibly a server setting?
-                        newDoodad.Transform.Local.SetHeight(depth < 30f ? floor : Math.Max(floor, surface));
+                        // [lot-9.1] Z-placement water-aware. Previous code used `?? 0f` as
+                        // a surface fallback, which on dry land where OceanLevel > floor would
+                        // produce depth >= 30m and snap the backpack to OceanLevel mid-air.
+                        var floor = ParentWorld.GetHeight(newDoodad.Transform.World.Position);
+                        var water = WorldManager.Instance.GetWorld(doodad.Transform.InstanceId)?.Water;
+                        var surface = water?.GetWaterSurface(newDoodad.Transform.World.Position, out _) ?? float.MinValue;
+                        var hasWater = surface > floor + 0.5f;
+                        float backpackZ;
+                        if (!hasWater)
+                            backpackZ = floor + 0.05f;                  // dry land
+                        else if ((surface - floor) >= 30f)
+                            backpackZ = surface;                        // deep water: float
+                        else
+                            backpackZ = floor + 0.05f;                  // shallow water: sink
+                        newDoodad.Transform.Local.SetHeight(backpackZ);
 
                         // Save new doodad
                         newDoodad.InitDoodad();
@@ -901,13 +909,23 @@ public class Slave : Unit
                 rng *= Random.Shared.NextSingle() * dropDoodad.Radius;
                 pos += rng;
                 doodad.Transform.Local.SetPosition(pos);
-                if (dropDoodad.OnWater == false)
+                // [lot-9.1] Z-placement water-aware. Previous code blindly snapped
+                // OnWater=false debris to seafloor when ship was destroyed in deep
+                // water, producing debris visibly under the map. Now floats every
+                // debris in deep water regardless of template flag.
                 {
-                    doodad.Transform.Local.SetHeight(doodad.ParentWorld.GetHeight(doodad.Transform.World.Position)); //WorldManager.Instance.GetHeight(doodad.Transform.ZoneId, pos.X, pos.Y, pos.Z));
-                }
-                else
-                {
-                    doodad.Transform.Local.SetHeight(WorldManager.Instance.GetWorld(doodad.Transform.InstanceId).Water.GetWaterSurface(pos, out _));
+                    var floor = doodad.ParentWorld.GetHeight(doodad.Transform.World.Position);
+                    var water = WorldManager.Instance.GetWorld(doodad.Transform.InstanceId)?.Water;
+                    var surface = water?.GetWaterSurface(pos, out _) ?? float.MinValue;
+                    var hasWater = surface > floor + 0.5f;
+                    float debrisZ;
+                    if (!hasWater)
+                        debrisZ = floor + 0.05f;                        // dry land
+                    else if (dropDoodad.OnWater || (surface - floor) >= 30f)
+                        debrisZ = surface;                              // floats
+                    else
+                        debrisZ = floor + 0.05f;                        // shallow water: sinks
+                    doodad.Transform.Local.SetHeight(debrisZ);
                 }
                 doodad.Transform.Local.Rotate(0, 0, (float)(Random.Shared.NextDouble() * Math.PI * 2f));
                 doodad.InitDoodad();
