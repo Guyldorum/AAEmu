@@ -1289,18 +1289,27 @@ public partial class Npc : Unit
         // TODO: Implement proper use for Transform.World.AddDistanceToFront
         var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(travelDist, targetDist, Transform.Local.Position, other);
         var targetPositionZ = ParentWorld.GetReferenceHeight(Ai, new Vector3(newX, newY, newZ), Transform.ZoneId);
-        // 5b.j: resolve step Z. In combat, take max(newZ, targetPositionZ) so the
-        // NPC can climb stairs/ledges: newZ is the linearly interpolated Z
-        // between Position.Z and other.Z (the waypoint), and Sandbox places
-        // navmesh waypoints on top of staircase steps. The brush pipeline
-        // (consulted via GetReferenceHeight) does not see those steps
-        // (raycastHit observed as 'heightmap' 100% of samples), so without
-        // the max the NPC stays glued to the heightmap floor. On flat ground
-        // newZ ≈ targetPositionZ so the max is a no-op. Flying units keep
-        // newZ raw (airborne path). Non-combat keeps targetPositionZ alone.
+        // 5b.n: resolve step Z with a stricter rule than lot-5b.j. Math.Max
+        // (newZ, terrain) is only legitimate when we follow a navmesh waypoint
+        // — Sandbox places those on top of staircase steps so newZ rises with
+        // the climb. When the NPC is in combat but FoundPath is empty (A*
+        // could not connect, e.g. player on top of an unreachable structure
+        // like the burnt castle of Cendrepierre where walls/stairs live in
+        // NavigationModifiers we do not load into the NetMission graph), BCB
+        // falls back to MoveTowards(target.Position) direct. In that fallback,
+        // newZ interpolates linearly toward the player Z — high above the
+        // ground. Applying Math.Max here would make the NPC fly to the player.
+        // Restrict Math.Max to the path-active case to prevent this.
         float stepZ;
         if (movingIntoAttackRange)
-            stepZ = (Ai?.Owner?.CanFly ?? false) ? newZ : MathF.Max(newZ, targetPositionZ);
+        {
+            if (Ai?.Owner?.CanFly ?? false)
+                stepZ = newZ;
+            else if (Ai?.PathNode?.FoundPath != null && Ai.PathNode.FoundPath.Count > 0)
+                stepZ = MathF.Max(newZ, targetPositionZ);
+            else
+                stepZ = targetPositionZ;
+        }
         else
             stepZ = targetPositionZ;
         Transform.Local.SetPosition(newX, newY, stepZ);
