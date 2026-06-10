@@ -1305,7 +1305,21 @@ public partial class Npc : Unit
             stepZ = targetPositionZ;
         Transform.Local.SetPosition(newX, newY, stepZ);
 
-        var angle = MathUtil.CalculateAngleFrom(Transform.Local.Position, other);
+        // 5b.l: compute orientation from actual XY displacement, not from 'other'.
+        // BCB calls MoveTowards with either a navmesh waypoint or the player position
+        // depending on which branch fires; using 'other' for rotation makes the NPC
+        // face whatever was passed as the move target, which is sometimes the player
+        // even when the NPC is physically moving sideways around obstacles. Computing
+        // the angle from oldPosition → new (newX, newY) keeps the model aligned with
+        // its actual direction of motion. When the NPC barely moved this tick (collision,
+        // tiny step), fall back to the old behaviour (face 'other') to avoid jittering.
+        double angle;
+        var motionDx = newX - oldPosition.X;
+        var motionDy = newY - oldPosition.Y;
+        if (motionDx * motionDx + motionDy * motionDy > 0.0001f)
+            angle = MathUtil.CalculateAngleFrom(oldPosition.X, oldPosition.Y, newX, newY);
+        else
+            angle = MathUtil.CalculateAngleFrom(Transform.Local.Position, other);
         var (velX, velY) = MathUtil.AddDistanceToFront(4000, 0, 0, (float)angle.DegToRad());
         Transform.Local.SetRotationDegree(0f, 0f, (float)angle - 90);
         var (rx, ry, rz) = Transform.Local.ToRollPitchYawSBytesMovement();
