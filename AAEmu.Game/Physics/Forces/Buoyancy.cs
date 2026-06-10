@@ -18,6 +18,12 @@ public class Buoyancy : ForceGenerator
     // [lot-10.1] Dedicated NLog logger, qualified to avoid clashing with Jitter2.Logger
     private static readonly NLog.Logger SpawnDiagLogger = NLog.LogManager.GetCurrentClassLogger();
 
+    // [lot-10.1.2] Settling window : after the corrective snap at PortalTime end,
+    // an external system (Replication smoothing?) tugs the Hull back toward its
+    // pre-snap position. For 2s we lock Hull.Y at equilibrium and zero velocities
+    // each tick to defeat this perturbation.
+    private readonly Dictionary<uint, DateTime> _settlingEndsAt = new();
+
     public static float BaseWaterDensity = 1.025f;
 
     /// <summary>
@@ -215,6 +221,30 @@ public class Buoyancy : ForceGenerator
             if (slave.ShipController == null || slave.ShipController.ShipModel.Mass <= 0)
                 continue;
 
+            // [lot-10.1.2] Settling-window lock. After the corrective snap, force
+            // Hull at equilibrium and zero velocities every tick for 2s to defeat
+            // external position perturbations. After settling expires, normal
+            // buoyancy processing resumes naturally.
+            if (_settlingEndsAt.TryGetValue(slave.Id, out var settlingEnd))
+            {
+                if (DateTime.UtcNow < settlingEnd)
+                {
+                    var lockedDraft = 1f / (Density * ShipWaterDensityMul);
+                    var lockedPos = body.Position;
+                    lockedPos.Y = WaterSurfaceLevel - lockedDraft;
+                    body.Position = lockedPos;
+                    body.Velocity = JVector.Zero;
+                    body.AngularVelocity = JVector.Zero;
+                    SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK Y={lockedPos.Y:F3} velocities=0 (remaining={(settlingEnd - DateTime.UtcNow).TotalSeconds:F2}s)");
+                    continue;
+                }
+                else
+                {
+                    _settlingEndsAt.Remove(slave.Id);
+                    SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK released, normal buoyancy resumes");
+                }
+            }
+
             // [lot-10.1.1 SPAWNDIAG] Track 15s from spawn covering PortalTime + post.
             // Logged BEFORE the AffectedByGravity early-return so PortalTime drift is observable.
             var timeSinceSpawn = (DateTime.UtcNow - slave.SpawnTime).TotalSeconds;
@@ -248,7 +278,10 @@ public class Buoyancy : ForceGenerator
                 body.Position = snappedPos;
                 body.Velocity = JVector.Zero;
                 body.AngularVelocity = JVector.Zero;
-                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} POST-PORTAL CORRECTIVE SNAP: preSnapY={preSnapY:F3} -> snappedY={snappedPos.Y:F3} (ocean={WaterSurfaceLevel:F3} draft={draft:F3}) velocities zeroed");
+                // [lot-10.1.2] Start 2s settling window — locks Y/velocities each tick
+                // to defeat external position perturbations (replication smoothing etc.).
+                _settlingEndsAt[slave.Id] = DateTime.UtcNow.AddSeconds(2);
+                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} POST-PORTAL CORRECTIVE SNAP: preSnapY={preSnapY:F3} -> snappedY={snappedPos.Y:F3} (ocean={WaterSurfaceLevel:F3} draft={draft:F3}) velocities zeroed, settling 2s");
             }
             if (!body.AffectedByGravity)
             {
