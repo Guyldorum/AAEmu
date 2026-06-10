@@ -15,6 +15,9 @@ namespace AAEmu.Game.Physics.Forces;
 /// </summary>
 public class Buoyancy : ForceGenerator
 {
+    // [lot-10.1] Dedicated NLog logger, qualified to avoid clashing with Jitter2.Logger
+    private static readonly NLog.Logger SpawnDiagLogger = NLog.LogManager.GetCurrentClassLogger();
+
     public static float BaseWaterDensity = 1.025f;
 
     /// <summary>
@@ -242,6 +245,16 @@ public class Buoyancy : ForceGenerator
 
                 var dragForce = new JVector(-body.Velocity.X * Density, -body.Velocity.Y * Density, -body.Velocity.Z * Density);
                 body.AddForce(dragForce);
+            }
+
+            // [lot-10.1 SPAWNDIAG] Log first 3s after PortalTime expiration to observe
+            // spawn rebound behavior. Auto-disables after timeSincePortal >= 3s.
+            var portalEndTime = slave.SpawnTime.AddSeconds(slave.Template.PortalTime);
+            var timeSincePortal = (DateTime.UtcNow - portalEndTime).TotalSeconds;
+            if (timeSincePortal >= 0 && timeSincePortal < 3.0)
+            {
+                var buoyMag = submergedDepth * body.Mass * Density * ShipWaterDensityMul * 9.81f;
+                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} t={timeSincePortal:F3}s posY={body.Position.Y:F3} ocean={waterSurfaceLevel:F3} depth={submergedDepth:F3} velY={body.Velocity.Y:F3} buoyF={buoyMag:F1}");
             }
         }
     }

@@ -485,6 +485,22 @@ public class PhysicsManager
         var pos = new JVector(slave.Transform.World.Position.X, slave.Transform.World.Position.Z,
             slave.Transform.World.Position.Y);
         var rot = JQuaternion.CreateRotationY(slave.Transform.World.Rotation.Z);
+
+        // [lot-10.1] Snap initial Hull Y to buoyancy equilibrium draft to prevent
+        // catapult/bounce when body.AffectedByGravity flips at end of PortalTime.
+        // Equilibrium: submergedDepth × Mass × Density × ShipWaterDensityMul × g = Mass × g
+        //   → submergedDepth = 1 / (Density × ShipWaterDensityMul)
+        // Guard: only snap if spawn position is close to ocean level (in-water spawn).
+        var originalSpawnY = pos.Y;
+        var oceanLevel = Buoyancy.FluidBox.Max.Y;
+        var equilibriumDraft = 1f / (Buoyancy.BaseWaterDensity * Buoyancy.ShipWaterDensityMul);
+        var nearWaterSurface = MathF.Abs(originalSpawnY - oceanLevel) < 5f;
+        if (nearWaterSurface)
+        {
+            pos.Y = oceanLevel - equilibriumDraft;
+        }
+        Logger.Info($"[SPAWNDIAG] {slave.Name} spawnInit origY={originalSpawnY:F2} ocean={oceanLevel:F2} draft={equilibriumDraft:F3} snapped={nearWaterSurface} → finalY={pos.Y:F2}");
+
         //                                     Width                   Length                  Height
         // var dimensions = new JVector(shipModel.MassBoxSizeX, shipModel.MassBoxSizeY, shipModel.MassBoxSizeZ);
         var ctrl = new ShipController(PhysWorld, shipModel);
