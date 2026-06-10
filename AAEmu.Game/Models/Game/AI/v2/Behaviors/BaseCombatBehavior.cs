@@ -215,7 +215,29 @@ public abstract class BaseCombatBehavior : Behavior
                 else
                 {
                     if (distanceToTarget > range)
-                        Ai.Owner.MoveTowards(target.Transform.World.Position, (float)speed, moveFlags, range);
+                    {
+                        // 5b.m: acquire a path before falling back to direct move-to-player.
+                        // FoundPath is empty either at aggro start (never initialised) or
+                        // momentarily between FindPath cycles. Falling straight to
+                        // MoveTowards(player) here pulls the rotation toward the player
+                        // and the NPC visually faces the player while running along the
+                        // navmesh path. Re-acquiring the path here keeps MoveTowards
+                        // targeted at the next waypoint, and the resulting rotation is
+                        // aligned with actual motion.
+                        Ai.Owner.FindPath((Unit)target);
+                        if (Ai.PathNode.FoundPath.Count > 0)
+                        {
+                            Ai.PathNode.CurrentTargetPos = Ai.PathNode.FoundPath.Dequeue();
+                            Ai.Owner.MoveTowards(Ai.PathNode.CurrentTargetPos, (float)speed, moveFlags, range);
+                        }
+                        else
+                        {
+                            // Path acquisition failed for this tick. Fallback legacy
+                            // direct-move to keep aggro responsive; rotation will
+                            // briefly face the player, accepted.
+                            Ai.Owner.MoveTowards(target.Transform.World.Position, (float)speed, moveFlags, range);
+                        }
+                    }
                     else
                         Ai.Owner.StopMovement();
                 }
