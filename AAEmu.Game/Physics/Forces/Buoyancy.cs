@@ -24,6 +24,12 @@ public class Buoyancy : ForceGenerator
     // each tick to defeat this perturbation.
     private readonly Dictionary<uint, DateTime> _settlingEndsAt = new();
 
+    // [lot-10.1.5] Track ships that have already received their POST-PORTAL
+    // CORRECTIVE SNAP this spawn. Prevents the settling lock (which sets
+    // AffectedByGravity=false in lot-10.1.4) from re-triggering the snap at
+    // every release in an infinite loop.
+    private readonly HashSet<uint> _hasSnappedThisSpawn = new();
+
     public static float BaseWaterDensity = 1.025f;
 
     /// <summary>
@@ -273,8 +279,9 @@ public class Buoyancy : ForceGenerator
             // Resets position to buoyancy equilibrium and zeros velocities -> no catapult.
             var wasAffected = body.AffectedByGravity;
             body.AffectedByGravity = !inPortal;
-            if (!wasAffected && body.AffectedByGravity)
+            if (!wasAffected && body.AffectedByGravity && !_hasSnappedThisSpawn.Contains(slave.Id))
             {
+                _hasSnappedThisSpawn.Add(slave.Id);
                 var draft = 1f / (Density * ShipWaterDensityMul);
                 var preSnapY = body.Position.Y;
                 var snappedPos = body.Position;
