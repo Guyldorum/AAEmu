@@ -298,8 +298,15 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
         if (Physics is { WorldHeightMapTester: not null })
         {
             RigidBody voxelHit = null;
-            // Check voxel floor collision
-            foreach ( var voxel in Physics.VoxelObjects.ToArray())
+            // Check voxel floor collision.
+            // [lot-5b.o.2] Snapshot atomique sous WorldLock pour éviter race
+            // avec PhysicsThread qui modifie VoxelObjects pendant le chargement
+            // / déchargement de cellules. Sans ce lock, ToArray() peut crasher
+            // avec "Destination array was not long enough" (Array.Copy race).
+            // Lock court (juste ToArray, quelques µs) ; itération hors lock.
+            RigidBody[] voxelSnapshot;
+            lock (Physics.WorldLock) { voxelSnapshot = Physics.VoxelObjects.ToArray(); }
+            foreach ( var voxel in voxelSnapshot)
             {
                 if (!JBoundingBoxContains2DPoint(roughPosArea, voxel.Position.X, voxel.Position.Y))
                     continue;
@@ -333,8 +340,13 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
             }
 
             RigidBody brushHit = null;
-            // Check if hitting static level objects (buildings and ramps)
-            foreach ( var brush in Physics.BrushObjects.ToArray())
+            // Check if hitting static level objects (buildings and ramps).
+            // [lot-5b.o.2] Snapshot atomique sous WorldLock pour éviter race
+            // avec PhysicsThread qui modifie BrushObjects pendant le chargement
+            // / déchargement de cellules. Voir patch voxel ci-dessus pour détails.
+            RigidBody[] brushSnapshot;
+            lock (Physics.WorldLock) { brushSnapshot = Physics.BrushObjects.ToArray(); }
+            foreach ( var brush in brushSnapshot)
             {
                 if (!JBoundingBoxContains2DPoint(roughPosArea, brush.Position.X, brush.Position.Y))
                     continue;
