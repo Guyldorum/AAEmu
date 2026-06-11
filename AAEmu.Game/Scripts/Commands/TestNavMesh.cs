@@ -84,19 +84,25 @@ public class TestNavMesh : ICommand
             var hasLos = npc.HasLineOfSight(character);
             losWatch.Stop();
 
-            // [lot-5b.o.3] Tri-état decision : DIRECT, ASTAR_CLIMB (LoS clair mais
-            // cible en hauteur → A*), ASTAR (LoS bloqué). Mirror exact du check
-            // appliqué dans Npc.FindPath (seuil 1.5m).
-            const float MaxDirectClimbDelta = 1.5f;
+            // [lot-5b.o.4] Tri-état decision avec slope-based check. Mirror exact
+            // du calcul dans Npc.FindPath : allowedClimb = max(1.5m, dist × 25%).
+            const float MaxDirectClimbBase = 1.5f;
+            const float MaxDirectClimbSlope = 0.25f;
             var verticalDelta = losGoal.Z - losStart.Z;
+            var dx = losGoal.X - losStart.X;
+            var dy = losGoal.Y - losStart.Y;
+            var horizontalDistance = MathF.Sqrt(dx * dx + dy * dy);
+            var allowedClimb = MathF.Max(MaxDirectClimbBase, horizontalDistance * MaxDirectClimbSlope);
+            var slope = horizontalDistance > 0.01f ? verticalDelta / horizontalDistance : 0f;
             string decision;
             if (!hasLos) decision = "ASTAR";
-            else if (verticalDelta > MaxDirectClimbDelta) decision = "ASTAR_CLIMB";
+            else if (verticalDelta > allowedClimb) decision = "ASTAR_CLIMB";
             else decision = "DIRECT";
 
             messageOutput.SendMessage($"[lot-5b.o LoS diag]");
             messageOutput.SendMessage($"  NPC: {npc.Name} (objId={npc.ObjId}, tpl={npc.TemplateId})");
-            messageOutput.SendMessage($"  Distance: {distance:F1}m, verticalDelta: {verticalDelta:F2}m (max {MaxDirectClimbDelta}m for DIRECT)");
+            messageOutput.SendMessage($"  Distance: {distance:F1}m, verticalDelta: {verticalDelta:F2}m");
+            messageOutput.SendMessage($"  Slope: {slope*100:F1}% (max {MaxDirectClimbSlope*100:F0}%), allowedClimb: {allowedClimb:F2}m");
             messageOutput.SendMessage($"  HasLineOfSight: {hasLos} (took {(long)losWatch.Elapsed.TotalMicroseconds}us)");
             messageOutput.SendMessage($"  Decision: {decision}");
 
@@ -131,10 +137,10 @@ public class TestNavMesh : ICommand
                 using var writer = new StreamWriter(csvFile, append: true);
                 if (needsHeader)
                 {
-                    writer.WriteLine("timestamp;world;npcName;npcObjId;templateId;npcX;npcY;npcZ;targetName;targetX;targetY;targetZ;distance;verticalDelta;hasLos;losUs;decision");
+                    writer.WriteLine("timestamp;world;npcName;npcObjId;templateId;npcX;npcY;npcZ;targetName;targetX;targetY;targetZ;distance;verticalDelta;slope;allowedClimb;hasLos;losUs;decision");
                 }
                 var ts = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                writer.WriteLine($"{ts};{world.Template.Name};{npc.Name};{npc.ObjId};{npc.TemplateId};{losStart.X:F2};{losStart.Y:F2};{losStart.Z:F2};{character.Name};{losGoal.X:F2};{losGoal.Y:F2};{losGoal.Z:F2};{distance:F2};{verticalDelta:F2};{hasLos};{(long)losWatch.Elapsed.TotalMicroseconds};{decision}");
+                writer.WriteLine($"{ts};{world.Template.Name};{npc.Name};{npc.ObjId};{npc.TemplateId};{losStart.X:F2};{losStart.Y:F2};{losStart.Z:F2};{character.Name};{losGoal.X:F2};{losGoal.Y:F2};{losGoal.Z:F2};{distance:F2};{verticalDelta:F2};{slope:F3};{allowedClimb:F2};{hasLos};{(long)losWatch.Elapsed.TotalMicroseconds};{decision}");
                 messageOutput.SendMessage($"  CSV: Data/Custom/losnavtest.csv (append)");
             }
             catch (Exception ex)

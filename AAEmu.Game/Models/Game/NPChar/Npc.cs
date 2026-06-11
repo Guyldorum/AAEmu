@@ -1656,16 +1656,22 @@ public partial class Npc : Unit
         // (cas trivial posStart.Id == posEnd.Id).
         if (Ai.Owner.HasLineOfSight(abuser))
         {
-            // [lot-5b.o.3] Si la cible est nettement au-dessus, force A* même si LoS
-            // est clair. Le raycast peut passer en ligne droite (par-dessus ou à travers
-            // une structure) mais le NPC ne peut pas physiquement traverser un mur en
-            // montée — il lui faut l'escalier que seul le navmesh A* peut trouver.
-            // Seuil 1.5m = ~3 marches d'escalier. Sur terrain naturel en pente, le
-            // delta Z reste comparable à la distance horizontale et reste sous le seuil
-            // sur courte distance ; sur un escalier vertical, le delta saute brutalement.
-            const float MaxDirectClimbDelta = 1.5f;
+            // [lot-5b.o.4] Pente-based climb check : allowedClimb = max(1.5m, dist × 25%).
+            // Remplace le seuil fixe 1.5m de lot-5b.o.3 qui était trop conservateur pour
+            // les collines naturelles. Une colline modérée à 7-12% est physiquement
+            // traversable en ligne droite ; un escalier (50%+) ou un mur (90%+) ne l'est
+            // pas. Le seuil 25% (~14°) sépare les deux régimes proprement.
+            //   - Escalier 22m/11m  → allowedClimb=5.5m, delta 11m > 5.5m → A*
+            //   - Colline 30m/3m    → allowedClimb=7.5m, delta 3m < 7.5m → direct
+            //   - Court 3m/1m       → allowedClimb=1.5m, delta 1m < 1.5m → direct
+            const float MaxDirectClimbBase = 1.5f;    // minimum absolu (anti-faux-négatif court)
+            const float MaxDirectClimbSlope = 0.25f;  // pente max acceptable (25% ≈ 14°)
             var verticalDelta = goal.Z - start.Z;
-            if (verticalDelta <= MaxDirectClimbDelta)
+            var dx = goal.X - start.X;
+            var dy = goal.Y - start.Y;
+            var horizontalDistance = MathF.Sqrt(dx * dx + dy * dy);
+            var allowedClimb = MathF.Max(MaxDirectClimbBase, horizontalDistance * MaxDirectClimbSlope);
+            if (verticalDelta <= allowedClimb)
             {
                 var directPath = new List<Vector3> { goal };
                 // [lot-5b.o.1] Reproduce PathNode.FindPath trivial case (posStart.Id == posEnd.Id)
