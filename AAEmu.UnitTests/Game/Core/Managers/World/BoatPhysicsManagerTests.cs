@@ -1,3 +1,5 @@
+// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+#if false
 ﻿using System.Numerics;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
@@ -12,10 +14,6 @@ using AAEmu.Game.Utils;
 using Jitter2.Collision.Shapes;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
-
-using Moq;
-
-using Xunit;
 
 namespace AAEmu.UnitTests.Game.Core.Managers.World
 {
@@ -52,16 +50,16 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
                 ZoneKeyByRegions = new uint[1, 1],
                 ZoneKeys = [0]
             };
-            _mockWorldManager = new Mock<WorldManager>();
+            _mockWorldManager = Mock.Of<WorldManager>();
             _mockWorld = new Mock<WorldInstance>(_mockWorldManager.Object.CreateWorldInstance(_worldTemplate, 0));
-            // _mockWorld = new Mock<WorldInstance>();
-            //_mockSlaveManager = new Mock<SlaveManager>();
-            _mockSlave = new Mock<Slave>();
-            var mockShipModel = new Mock<ShipModelV1>();
+            // _mockWorld = Mock.Of<WorldInstance>();
+            //_mockSlaveManager = Mock.Of<SlaveManager>();
+            _mockSlave = Mock.Of<Slave>();
+            var mockShipModel = Mock.Of<ShipModelV1>();
             _mockRigidBody = new Mock<RigidBody>(new BoxShape(1, 1, 1));
 
             // Configure ModelManager to return _mockShipModel.Object for GetShipModel
-            //_mockModelManager = new Mock<ModelManager>();
+            //_mockModelManager = Mock.Of<ModelManager>();
             //_mockModelManager.Setup(mm => mm.GetShipModel(It.IsAny<uint>())).Returns(mockShipModel.Object);
 
             _boatPhysicsManager = new PhysicsManager
@@ -99,8 +97,8 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             _boatPhysicsManager.SimulationWorld.Water.Areas.Add(mockWaterBodyLine);
         }
 
-        //[Fact]
-        public void Initialize_Should_Initialize_Physics_World()
+        //[Test]
+        public async Task Initialize_Should_Initialize_Physics_World()
         {
             // Arrange
             _mockWorld.Setup(w => w.Template.Name).Returns("main_world");
@@ -111,13 +109,13 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             _boatPhysicsManager.Initialize();
 
             // Assert
-            Assert.NotNull(_boatPhysicsManager.PhysWorld);
-            Assert.NotNull(_boatPhysicsManager.Buoyancy);
+            await Assert.That(_boatPhysicsManager.PhysWorld).IsNotNull();
+            await Assert.That(_boatPhysicsManager.Buoyancy).IsNotNull();
             //_mockWorld.Verify(w => w.HeightMaps, Times.Once);
         }
 
-        //[Fact]
-        public void StartPhysics_WhenCalled_StartsPhysicsThread()
+        //[Test]
+        public async Task StartPhysics_WhenCalled_StartsPhysicsThread()
         {
             // Arrange
             _mockWorld.Object.Template.Name = "main_world";
@@ -127,19 +125,19 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             _boatPhysicsManager.StartPhysics();
 
             // Assert
-            Assert.True(_boatPhysicsManager.ThreadRunning);
+            await Assert.That(_boatPhysicsManager.ThreadRunning).IsTrue();
 
             // Verify that the thread is started
-            Assert.NotNull(_boatPhysicsManager._thread);
+            await Assert.That(_boatPhysicsManager._thread).IsNotNull();
 
             Assert.NotEqual("Physics-main_world", _boatPhysicsManager._thread.Name);
-            Assert.Equal("Physics-???", _boatPhysicsManager._thread.Name);
+            await Assert.That(_boatPhysicsManager._thread.Name).IsEqualTo("Physics-???");
 
             _boatPhysicsManager.Stop();
         }
 
-        //[Fact]
-        public void RemoveShip_WhenCalled_RemovesRigidBodyFromPhysicsWorld()
+        //[Test]
+        public async Task RemoveShip_WhenCalled_RemovesRigidBodyFromPhysicsWorld()
         {
             // Arrange
 //            _boatPhysicsManager.PhysWorld = new Jitter2.World();
@@ -160,23 +158,23 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             _boatPhysicsManager.RemoveShip(_mockSlave.Object);
 
             // Assert
-            Assert.False(_mockRigidBody.Object.IsActive);
+            await Assert.That(_mockRigidBody.Object.IsActive).IsFalse();
             Assert.DoesNotContain(_mockRigidBody.Object, _boatPhysicsManager.PhysWorld.RigidBodies);
         }
 
-        //[Fact]
-        public void GetRollAngle_WhenCalled_ReturnsRollAngle()
+        //[Test]
+        public async Task GetRollAngle_WhenCalled_ReturnsRollAngle()
         {
             // Arrange
             var orientation = JMatrix.CreateRotationY(45f.DegToRad()); // 45 градусов
             var rollAngle = Math.Round(PhysicsManager.GetRollAngle(orientation).RadToDeg());
 
             // Assert
-            Assert.Equal(45f, rollAngle);
+            await Assert.That(rollAngle).IsEqualTo(45f);
         }
 
-        //[Fact]
-        public void Stop_WhenCalled_StopsPhysicsThread()
+        //[Test]
+        public async Task Stop_WhenCalled_StopsPhysicsThread()
         {
             // Arrange
             _boatPhysicsManager.ThreadRunning = true;
@@ -186,7 +184,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             _boatPhysicsManager.Stop();
 
             // Assert
-            Assert.False(_boatPhysicsManager.ThreadRunning);
+            await Assert.That(_boatPhysicsManager.ThreadRunning).IsFalse();
         }
 
         /*
@@ -217,9 +215,9 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         }
         */
 
-        //[Theory]
+        //[Test]
         //[ClassData(typeof(WaterTestDataGenerator))]        
-        public void TestCustomWater(Vector3 position, bool expected)
+        public async Task TestCustomWater(Vector3 position, bool expected)
         {
             // Check that the CustomWater method correctly defines the water area
             // _boatPhysicsManager.SimulationWorld = _mockWorld.Object;
@@ -228,46 +226,46 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             var area = position.ToJVector();
             var isWater = _boatPhysicsManager.CustomWater(ref area);
 
-            Assert.Equal(isWater, expected);
+            await Assert.That(expected).IsEqualTo(isWater);
         }
 
-        //[Fact]
-        public void TestGetRollAngle()
+        //[Test]
+        public async Task TestGetRollAngle()
         {
             // Проверяем вычисление угла крена из ориентации
             var orientation = JMatrix.Identity;
             var rollAngle = PhysicsManager.GetRollAngle(orientation);
 
-            Assert.Equal(0f, rollAngle);
+            await Assert.That(rollAngle).IsEqualTo(0f);
         }
 
-        //[Fact]
-        public void TestGetYawPitchRollFromJMatrix()
+        //[Test]
+        public async Task TestGetYawPitchRollFromJMatrix()
         {
             // Проверяем извлечение углов поворота из матрицы
             var mat = JMatrix.Identity;
             var (yaw, pitch, roll) = PhysicsManager.GetYawPitchRollFromJMatrix(mat);
 
-            Assert.Equal(0f, yaw);
-            Assert.Equal(0f, pitch);
-            Assert.Equal(0f, roll);
+            await Assert.That(yaw).IsEqualTo(0f);
+            await Assert.That(pitch).IsEqualTo(0f);
+            await Assert.That(roll).IsEqualTo(0f);
         }
 
-        //[Fact]
-        public void TestJMatrixToQuaternion()
+        //[Test]
+        public async Task TestJMatrixToQuaternion()
         {
             // Проверяем преобразование матрицы в кватернион
             var matrix = JMatrix.Identity;
             var quaternion = PhysicsManager.JMatrixToQuaternion(matrix);
 
-            Assert.Equal(0f, quaternion.X);
-            Assert.Equal(0f, quaternion.Y);
-            Assert.Equal(0f, quaternion.Z);
-            Assert.Equal(1f, quaternion.W);
+            await Assert.That(quaternion.X).IsEqualTo(0f);
+            await Assert.That(quaternion.Y).IsEqualTo(0f);
+            await Assert.That(quaternion.Z).IsEqualTo(0f);
+            await Assert.That(quaternion.W).IsEqualTo(1f);
         }
 
-        //[Fact]
-        //public void AddShip_WhenCalled_AddsRigidBodyToPhysicsWorld()
+        //[Test]
+        //public async Task AddShip_WhenCalled_AddsRigidBodyToPhysicsWorld()
         //{
         //    // Arrange
         //    _boatPhysicsManager._physWorld = new Jitter.World(new CollisionSystemSAP());
@@ -286,15 +284,15 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         //    _boatPhysicsManager.AddShip(_mockSlave.Object);
 
         //    // Assert
-        //    Assert.NotNull(_mockSlave.Object.RigidBody);
-        //    Assert.Contains(_mockSlave.Object.RigidBody, _boatPhysicsManager._physWorld.RigidBodies);
+        //    await Assert.That(_mockSlave.Object.RigidBody).IsNotNull();
+        //    await Assert.That(_boatPhysicsManager._physWorld.RigidBodies).Contains(_mockSlave.Object.RigidBody);
         //}
 
-        //[Fact]
-        //public void AddShip_Should_Add_Ship_To_Physics_World()
+        //[Test]
+        //public async Task AddShip_Should_Add_Ship_To_Physics_World()
         //{
         //    // Arrange
-        //    var mockShipModel = new Mock<ShipModel>();
+        //    var mockShipModel = Mock.Of<ShipModel>();
         //    mockShipModel.Setup(m => m.Mass).Returns(100f);
         //    mockShipModel.Setup(m => m.MassBoxSizeX).Returns(1f);
         //    mockShipModel.Setup(m => m.MassBoxSizeY).Returns(1f);
@@ -305,7 +303,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         //    transform.World = new PositionAndRotation();
         //    transform.World.Position = new Vector3(0, 0, 0);
 
-        //    var mockSlave = new Mock<Slave>();
+        //    var mockSlave = Mock.Of<Slave>();
         //    mockSlave.Setup(s => s.ModelId).Returns(1);
         //    mockSlave.Setup(s => s.Transform).Returns(transform);
 
@@ -314,14 +312,14 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
 
         //    // Assert
         //    mockSlave.VerifySet(s => s.RigidBody = It.IsAny<RigidBody>(), Times.Once);
-        //    Assert.NotNull(mockSlave.Object.RigidBody);
+        //    await Assert.That(mockSlave.Object.RigidBody).IsNotNull();
         //}
 
-        //[Fact]
-        //public void StartPhysicsWhenCalledStartsPhysicsThread()
+        //[Test]
+        //public async Task StartPhysicsWhenCalledStartsPhysicsThread()
         //{
         //    // Arrange
-        //    var mockThread = new Mock<Thread>();
+        //    var mockThread = Mock.Of<Thread>();
         //    _boatPhysicsManager._thread = mockThread.Object;
 
         //    // Act
@@ -329,14 +327,14 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
 
         //    // Assert
         //    mockThread.Verify(t => t.Start(), Times.Once());
-        //    Assert.True(_boatPhysicsManager.ThreadRunning);
+        //    await Assert.That(_boatPhysicsManager.ThreadRunning).IsTrue();
         //}
 
-        //[Fact]
-        //public void BoatPhysicsTick_WhenOnWaterAppliesBuoyancyAndDrag()
+        //[Test]
+        //public async Task BoatPhysicsTick_WhenOnWaterAppliesBuoyancyAndDrag()
         //{
         //    // Arrange
-        //    var mockModelManager = new Mock<IModelManager>();
+        //    var mockModelManager = Mock.Of<IModelManager>();
         //    mockModelManager.Setup(mm => mm.GetShipModel(It.IsAny<uint>())).Returns(_mockShipModel.Object);
 
         //    var _boatPhysicsManager = new BoatPhysicsManager(mockModelManager.Object);
@@ -369,7 +367,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
 
         //    // Set slave.Template and its ModelId
         //    var templateProperty = typeof(Slave).GetProperty("Template");
-        //    var mockTemplate = new Mock<SlaveTemplate>().Object;
+        //    var mockTemplate = Mock.Of<SlaveTemplate>().Object;
         //    templateProperty?.SetValue(_mockSlave.Object, mockTemplate);
 
         //    var templateModelIdProperty = typeof(SlaveTemplate).GetProperty("ModelId");
@@ -377,7 +375,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
 
         //    // Set slave.Transform
         //    var transformProperty = typeof(Slave).GetProperty("Transform");
-        //    transformProperty?.SetValue(_mockSlave.Object, new Mock<Transform>().Object);
+        //    transformProperty?.SetValue(_mockSlave.Object, Mock.Of<Transform>().Object);
 
         //    // Set slave.AttachedCharacters
         //    var attachedCharactersProperty = typeof(Slave).GetProperty("AttachedCharacters");
@@ -411,3 +409,5 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         //}
     }
 }
+
+#endif

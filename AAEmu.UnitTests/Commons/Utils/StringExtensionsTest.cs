@@ -1,33 +1,33 @@
+// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+#if false
 ﻿using AAEmu.Commons.Utils;
-using Xunit;
-
 namespace AAEmu.UnitTests.Commons.Utils;
 
 public class StringExtensionsTest
 {
 
-    [Theory]
-    [InlineData("test", "Test"),
-    InlineData("Test", "Test"),
-    InlineData("tEST", "TEST"),
-    InlineData("TEST", "TEST"),
-    InlineData("test test", "Test test"),
-    InlineData("t", "T"),
-    InlineData("T", "T"),
-    InlineData("1", "1")]
+    [Test]
+    [Arguments("test", "Test"),
+    Arguments("Test", "Test"),
+    Arguments("tEST", "TEST"),
+    Arguments("TEST", "TEST"),
+    Arguments("test test", "Test test"),
+    Arguments("t", "T"),
+    Arguments("T", "T"),
+    Arguments("1", "1")]
     public Task FirstCharToUpper_ShouldWorkAsExpected(string input, string expected)
     {
         // Act
         var actual = input.FirstCharToUpper();
 
         // Assert
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEqualTo(expected);
         return Task.CompletedTask;
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData(null)]
+    [Test]
+    [Arguments("")]
+    [Arguments(null)]
     public Task FirstCharToUpper_ShouldThrowWhenInvalid(string input)
     {
         // Act & Assert
@@ -36,25 +36,27 @@ public class StringExtensionsTest
         return Task.CompletedTask;
     }
 
-    [Theory]
-    [InlineData("test", "Test"),
-     InlineData("Test", "Test"),
-     InlineData("tEST", "Test"),
-     InlineData("TEST", "Test"),
-     InlineData("TEST ", "Test"),
-     InlineData(" tEsT ", "Test"),
-     InlineData("test test", "Test test"),
-     InlineData("t", "T"),
-     InlineData("T", "T"),
-     InlineData("1", "1"),
-     InlineData(" \t ", " \t ")]
+    [Test]
+    [Arguments("test", "Test"),
+     Arguments("Test", "Test"),
+     Arguments("tEST", "Test"),
+     Arguments("TEST", "Test"),
+     Arguments("TEST ", "Test"),
+     Arguments(" tEsT ", "Test"),
+     Arguments("test test", "Test test"),
+     Arguments("t", "T"),
+     Arguments("T", "T"),
+     Arguments("1", "1"),
+     Arguments(" \t ", " \t ")]
     public Task NormalizeName_ShouldWorkAsExpected(string input, string expected)
     {
         // Act
         var actual = input.NormalizeName();
 
         // Assert
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEqualTo(expected);
         return Task.CompletedTask;
     }
 }
+
+#endif

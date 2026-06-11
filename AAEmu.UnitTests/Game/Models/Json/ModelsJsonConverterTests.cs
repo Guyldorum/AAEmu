@@ -1,14 +1,12 @@
 ﻿using AAEmu.Game.Models.Json;
 using AAEmu.Game.Utils.Converters;
 using Newtonsoft.Json;
-using Xunit;
-
 namespace AAEmu.UnitTests.Game.Models.Json;
 
 public class ModelsJsonConverterTests
 {
-    [Fact]
-    public void ConvertAComplexObject_WhenYawRollPitchIsZero_ShouldIgnore()
+    [Test]
+    public async Task ConvertAComplexObject_WhenYawRollPitchIsZero_ShouldIgnore()
     {
         //Arrange
         var spawnsList = new[]
@@ -35,11 +33,11 @@ public class ModelsJsonConverterTests
         var conversion = JsonConvert.SerializeObject(spawnsList, new JsonModelsConverter());
 
         //Assert
-        Assert.Equal(expected, conversion);
+        await Assert.That(conversion).IsEqualTo(expected);
     }
 
-    [Fact]
-    public void ConvertAComplexObject_WhenYawIsZero_ShouldIgnore()
+    [Test]
+    public async Task ConvertAComplexObject_WhenYawIsZero_ShouldIgnore()
     {
         //Arrange
         var spawnsList = new JsonNpcSpawns[]
@@ -66,6 +64,6 @@ public class ModelsJsonConverterTests
         var conversion = JsonConvert.SerializeObject(spawnsList, new JsonModelsConverter());
 
         //Assert
-        Assert.Equal(expected, conversion);
+        await Assert.That(conversion).IsEqualTo(expected);
     }
 }

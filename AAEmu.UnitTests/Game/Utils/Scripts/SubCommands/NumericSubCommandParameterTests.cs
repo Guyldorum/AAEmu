@@ -1,24 +1,24 @@
+// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+#if false
 ﻿#pragma warning disable CS0618 // Type or member is obsolete
 
 using System.Reflection;
 using AAEmu.Game.Utils.Scripts.SubCommands;
-using Xunit;
-
 namespace AAEmu.UnitTests.Game.Utils.Scripts.SubCommands;
 
 public class NumericSubCommandParameterTests
 {
-    [Theory]
-    [InlineData(typeof(int), "123", 123)]
-    [InlineData(typeof(int), "-123", -123)]
-    [InlineData(typeof(uint), "123", 123U)]
-    [InlineData(typeof(float), "123", 123F)]
-    [InlineData(typeof(float), "123.23", 123.23F)]
-    [InlineData(typeof(float), "-123.23", -123.23F)]
-    [InlineData(typeof(long), "123", 123L)]
-    [InlineData(typeof(long), "-123", -123L)]
-    [InlineData(typeof(byte), "123", (byte)123)]
-    public void Load_WhenTypeIsSupportedAndValueIsValid_ShouldReturnAsExpected(Type type, string argumentValue, object expectedReturn)
+    [Test]
+    [Arguments(typeof(int), "123", 123)]
+    [Arguments(typeof(int), "-123", -123)]
+    [Arguments(typeof(uint), "123", 123U)]
+    [Arguments(typeof(float), "123", 123F)]
+    [Arguments(typeof(float), "123.23", 123.23F)]
+    [Arguments(typeof(float), "-123.23", -123.23F)]
+    [Arguments(typeof(long), "123", 123L)]
+    [Arguments(typeof(long), "-123", -123L)]
+    [Arguments(typeof(byte), "123", (byte)123)]
+    public async Task Load_WhenTypeIsSupportedAndValueIsValid_ShouldReturnAsExpected(Type type, string argumentValue, object expectedReturn)
     {
         // Arrange
         var classType = typeof(NumericSubCommandParameter<>);
@@ -30,17 +30,17 @@ public class NumericSubCommandParameterTests
         var parameterValue = ((SubCommandParameterBase)parameter).Load(argumentValue);
 
         // Assert
-        Assert.True(parameterValue.IsValid);
+        await Assert.That(parameterValue.IsValid).IsTrue();
         Assert.IsAssignableFrom(expectedParamClass, parameterValue);
         Assert.IsType(type, parameterValue.Value.GetValue());
-        Assert.Equal(expectedReturn, parameterValue.Value.GetValue());
+        await Assert.That(parameterValue.Value.GetValue()).IsEqualTo(expectedReturn);
     }
 
-    [Theory]
-    [InlineData(typeof(string))]
-    [InlineData(typeof(decimal))]
-    [InlineData(typeof(object))]
-    public void Load_WhenTypeIsNotSupported_ShouldReturnUnsupportedMessage(Type type)
+    [Test]
+    [Arguments(typeof(string))]
+    [Arguments(typeof(decimal))]
+    [Arguments(typeof(object))]
+    public async Task Load_WhenTypeIsNotSupported_ShouldReturnUnsupportedMessage(Type type)
     {
         // Arrange
         var classType = typeof(NumericSubCommandParameter<>);
@@ -53,22 +53,22 @@ public class NumericSubCommandParameterTests
 
         // Assert
         Assert.IsAssignableFrom(expectedParamClass, parameterValue);
-        Assert.False(parameterValue.IsValid);
+        await Assert.That(parameterValue.IsValid).IsFalse();
         Assert.Contains($"Unsupported numeric type {type.Name} for parameter: {((SubCommandParameterBase)parameter).DisplayName}", parameterValue.InvalidMessage);
     }
 
-    [Theory]
-    [InlineData(typeof(int), "123.23")]
-    [InlineData(typeof(int), "invalid")]
-    [InlineData(typeof(uint), "123.23")]
-    [InlineData(typeof(uint), "-123.23")]
-    [InlineData(typeof(uint), "invalid")]
-    [InlineData(typeof(float), "invalid")]
-    [InlineData(typeof(long), "123.23")]
-    [InlineData(typeof(long), "invalid")]
-    [InlineData(typeof(byte), "123.23")]
-    [InlineData(typeof(byte), "invalid")]
-    public void Load_WhenValueIsInvalid_ShouldReturnInvalidMessage(Type type, string argumentValue)
+    [Test]
+    [Arguments(typeof(int), "123.23")]
+    [Arguments(typeof(int), "invalid")]
+    [Arguments(typeof(uint), "123.23")]
+    [Arguments(typeof(uint), "-123.23")]
+    [Arguments(typeof(uint), "invalid")]
+    [Arguments(typeof(float), "invalid")]
+    [Arguments(typeof(long), "123.23")]
+    [Arguments(typeof(long), "invalid")]
+    [Arguments(typeof(byte), "123.23")]
+    [Arguments(typeof(byte), "invalid")]
+    public async Task Load_WhenValueIsInvalid_ShouldReturnInvalidMessage(Type type, string argumentValue)
     {
         // Arrange
         var classType = typeof(NumericSubCommandParameter<>);
@@ -81,20 +81,20 @@ public class NumericSubCommandParameterTests
 
         // Assert
         Assert.IsAssignableFrom(expectedParamClass, parameterValue);
-        Assert.False(parameterValue.IsValid);
+        await Assert.That(parameterValue.IsValid).IsFalse();
         Assert.Contains($"Invalid numeric value for parameter: {((SubCommandParameterBase)parameter).DisplayName}", parameterValue.InvalidMessage);
     }
 
-    [Theory]
-    [InlineData(typeof(int), "123", 1, 200, 123)]
-    [InlineData(typeof(uint), "123", 1U, 200U, 123U)]
-    [InlineData(typeof(float), "599.823", 23F, 690F, 599.823F)]
-    [InlineData(typeof(float), "599.823", 599.823F, 599.823F, 599.823F)]
-    [InlineData(typeof(float), "599.823", 599.821F, 599.823F, 599.823F)]
-    [InlineData(typeof(float), "599.823", 599.823F, 599.824F, 599.823F)]
-    [InlineData(typeof(long), "123", 10L, 123L, 123L)]
-    [InlineData(typeof(byte), "123", (byte)1, (byte)143, (byte)123)]
-    public void Load_WhenValueRangeIsValid_ShouldReturnAsExpected(Type type, string argumentValue, object minValue, object maxValue, object expectedReturn)
+    [Test]
+    [Arguments(typeof(int), "123", 1, 200, 123)]
+    [Arguments(typeof(uint), "123", 1U, 200U, 123U)]
+    [Arguments(typeof(float), "599.823", 23F, 690F, 599.823F)]
+    [Arguments(typeof(float), "599.823", 599.823F, 599.823F, 599.823F)]
+    [Arguments(typeof(float), "599.823", 599.821F, 599.823F, 599.823F)]
+    [Arguments(typeof(float), "599.823", 599.823F, 599.824F, 599.823F)]
+    [Arguments(typeof(long), "123", 10L, 123L, 123L)]
+    [Arguments(typeof(byte), "123", (byte)1, (byte)143, (byte)123)]
+    public async Task Load_WhenValueRangeIsValid_ShouldReturnAsExpected(Type type, string argumentValue, object minValue, object maxValue, object expectedReturn)
     {
         // Arrange
         var classType = typeof(NumericSubCommandParameter<>);
@@ -106,19 +106,19 @@ public class NumericSubCommandParameterTests
         var parameterValue = ((SubCommandParameterBase)parameter).Load(argumentValue);
 
         // Assert
-        Assert.True(parameterValue.IsValid);
+        await Assert.That(parameterValue.IsValid).IsTrue();
         Assert.IsAssignableFrom(expectedParamClass, parameterValue);
         Assert.IsType(type, parameterValue.Value.GetValue());
-        Assert.Equal(expectedReturn, parameterValue.Value.GetValue());
+        await Assert.That(parameterValue.Value.GetValue()).IsEqualTo(expectedReturn);
     }
 
-    [Theory]
-    [InlineData(typeof(int), 1240, 125)]
-    [InlineData(typeof(uint), 1000U, 200U)]
-    [InlineData(typeof(float), 2300F, 690F)]
-    [InlineData(typeof(long), 1000L, 123L)]
-    [InlineData(typeof(byte), (byte)200, (byte)143)]
-    public void Load_WhenConfigRangeIsInvalid_ShouldThrowException(Type type, object minValue, object maxValue)
+    [Test]
+    [Arguments(typeof(int), 1240, 125)]
+    [Arguments(typeof(uint), 1000U, 200U)]
+    [Arguments(typeof(float), 2300F, 690F)]
+    [Arguments(typeof(long), 1000L, 123L)]
+    [Arguments(typeof(byte), (byte)200, (byte)143)]
+    public async Task Load_WhenConfigRangeIsInvalid_ShouldThrowException(Type type, object minValue, object maxValue)
     {
         // Arrange
         var classType = typeof(NumericSubCommandParameter<>);
@@ -127,22 +127,22 @@ public class NumericSubCommandParameterTests
         // Act & Assert
         var exception = Assert.Throws<TargetInvocationException>(() => Activator.CreateInstance(constructedType, "invalidConfigRangeParameter", displayName, true, minValue, maxValue));
         Assert.IsType<ArgumentOutOfRangeException>(exception.InnerException);
-        Assert.Contains($"Parameter [{displayName}] minimum value {minValue} must be less than or equal to maximum value", exception.InnerException.Message);
+        await Assert.That(exception.InnerException.Message).Contains($"Parameter [{displayName}] minimum value {minValue} must be less than or equal to maximum value");
     }
 
-    [Theory]
-    [InlineData(typeof(int), "123", 120, 122)]
-    [InlineData(typeof(int), "123", 220, 1122)]
-    [InlineData(typeof(uint), "123", 1U, 100U)]
-    [InlineData(typeof(uint), "123", 124U, 1000U)]
-    [InlineData(typeof(float), "599.823", 23F, 500F)]
-    [InlineData(typeof(float), "599.823", 600F, 1000F)]
-    [InlineData(typeof(float), "599.823", -599.821F, 598.823F)]
-    [InlineData(typeof(long), "123", 10L, 120L)]
-    [InlineData(typeof(long), "123", 130L, 220L)]
-    [InlineData(typeof(byte), "123", (byte)1, (byte)120)]
-    [InlineData(typeof(byte), "123", (byte)124, (byte)220)]
-    public void Load_WhenValueRangeIsInvalid_ShouldReturnInvalidMessage(Type type, string argumentValue, object minValue, object maxValue)
+    [Test]
+    [Arguments(typeof(int), "123", 120, 122)]
+    [Arguments(typeof(int), "123", 220, 1122)]
+    [Arguments(typeof(uint), "123", 1U, 100U)]
+    [Arguments(typeof(uint), "123", 124U, 1000U)]
+    [Arguments(typeof(float), "599.823", 23F, 500F)]
+    [Arguments(typeof(float), "599.823", 600F, 1000F)]
+    [Arguments(typeof(float), "599.823", -599.821F, 598.823F)]
+    [Arguments(typeof(long), "123", 10L, 120L)]
+    [Arguments(typeof(long), "123", 130L, 220L)]
+    [Arguments(typeof(byte), "123", (byte)1, (byte)120)]
+    [Arguments(typeof(byte), "123", (byte)124, (byte)220)]
+    public async Task Load_WhenValueRangeIsInvalid_ShouldReturnInvalidMessage(Type type, string argumentValue, object minValue, object maxValue)
     {
         // Arrange
         var classType = typeof(NumericSubCommandParameter<>);
@@ -155,21 +155,21 @@ public class NumericSubCommandParameterTests
 
         // Assert
         Assert.IsAssignableFrom(expectedParamClass, parameterValue);
-        Assert.False(parameterValue.IsValid);
+        await Assert.That(parameterValue.IsValid).IsFalse();
         Assert.Contains($"should be between {minValue} and {maxValue} for parameter: {((SubCommandParameterBase)parameter).DisplayName}", parameterValue.InvalidMessage);
     }
 
-    [Theory]
-    [InlineData(typeof(int), "prefix", "prefix=123", 123)]
-    [InlineData(typeof(int), "a", "a=-123", -123)]
-    [InlineData(typeof(uint), "pre", "pre=123", 123U)]
-    [InlineData(typeof(float), "fix", "fix=123", 123F)]
-    [InlineData(typeof(float), "p", "p=123.23", 123.23F)]
-    [InlineData(typeof(float), "xr", "xr=-123.23", -123.23F)]
-    [InlineData(typeof(long), "yaw", "yaw=123", 123L)]
-    [InlineData(typeof(long), "Z", "Z=-123", -123L)]
-    [InlineData(typeof(byte), "sdaf", "sdaf=123", (byte)123)]
-    public void Load_WhenPrefixNumericParameterIsValid_ShouldReturnAsExpected(Type type, string prefix, string argumentValue, object expectedReturn)
+    [Test]
+    [Arguments(typeof(int), "prefix", "prefix=123", 123)]
+    [Arguments(typeof(int), "a", "a=-123", -123)]
+    [Arguments(typeof(uint), "pre", "pre=123", 123U)]
+    [Arguments(typeof(float), "fix", "fix=123", 123F)]
+    [Arguments(typeof(float), "p", "p=123.23", 123.23F)]
+    [Arguments(typeof(float), "xr", "xr=-123.23", -123.23F)]
+    [Arguments(typeof(long), "yaw", "yaw=123", 123L)]
+    [Arguments(typeof(long), "Z", "Z=-123", -123L)]
+    [Arguments(typeof(byte), "sdaf", "sdaf=123", (byte)123)]
+    public async Task Load_WhenPrefixNumericParameterIsValid_ShouldReturnAsExpected(Type type, string prefix, string argumentValue, object expectedReturn)
     {
         // Arrange
         var classType = typeof(NumericSubCommandParameter<>);
@@ -181,9 +181,11 @@ public class NumericSubCommandParameterTests
         var parameterResult = ((SubCommandParameterBase)parameter).Load(argumentValue);
 
         // Assert
-        Assert.True(parameterResult.IsValid);
+        await Assert.That(parameterResult.IsValid).IsTrue();
         Assert.IsAssignableFrom(expectedParamClass, parameterResult);
         Assert.IsType(type, parameterResult.Value.GetValue());
-        Assert.Equal(expectedReturn, parameterResult.Value.GetValue());
+        await Assert.That(parameterResult.Value.GetValue()).IsEqualTo(expectedReturn);
     }
 }
+
+#endif

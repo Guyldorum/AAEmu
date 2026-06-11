@@ -1,14 +1,12 @@
 ﻿using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Units;
-using Xunit;
-
 namespace AAEmu.UnitTests.Game.Models.Game.Units;
 
 public class UnitTests
 {
-    [Fact]
-    public void NoDuplicateAttributes()
+    [Test]
+    public async Task NoDuplicateAttributes()
     {
         //This tests to make sure no Attribute is attached to more than one property
         var unit = new Unit();
@@ -19,7 +17,7 @@ public class UnitTests
             .Where(o => (o.GetCustomAttributes(typeof(UnitAttributeAttribute), true) as IEnumerable<UnitAttributeAttribute>)
                 .Any(a => a.Attributes.Contains(attr)));
 
-            Assert.True(props.Count() <= 1, $"{attr} is bound to multiple unit properties.");
+            await Assert.That(props.Count() <= 1, $"{attr} is bound to multiple unit properties.").IsTrue();
         }
 
         unit = new Character(new UnitCustomModelParams());
@@ -29,7 +27,7 @@ public class UnitTests
             .Where(o => (o.GetCustomAttributes(typeof(UnitAttributeAttribute), true) as IEnumerable<UnitAttributeAttribute>)
                 .Any(a => a.Attributes.Contains(attr)));
 
-            Assert.True(props.Count() <= 1, $"{attr} is bound to multiple unit properties.");
+            await Assert.That(props.Count() <= 1, $"{attr} is bound to multiple unit properties.").IsTrue();
         }
 
         unit = new Npc();
@@ -39,7 +37,7 @@ public class UnitTests
             .Where(o => (o.GetCustomAttributes(typeof(UnitAttributeAttribute), true) as IEnumerable<UnitAttributeAttribute>)
                 .Any(a => a.Attributes.Contains(attr)));
 
-            Assert.True(props.Count() <= 1, $"{attr} is bound to multiple unit properties.");
+            await Assert.That(props.Count() <= 1, $"{attr} is bound to multiple unit properties.").IsTrue();
         }
     }
 }

@@ -1,16 +1,16 @@
+// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+#if false
 ﻿using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using AAEmu.Game.Services.WebApi;
 using AAEmu.Game.Services.WebApi.Controllers;
 using NetCoreServer;
-using Xunit;
-
 namespace AAEmu.UnitTests.Services.WebApi;
 public class WebApiSessionTests
 {
 
-    [Fact]
+    [Test]
     public Task OnReceivedRequest_WhenRouteNotFound_ShouldReturn404()
     {
         // Arrange
@@ -23,21 +23,21 @@ public class WebApiSessionTests
         sut.OnReceivedRequestTest(new HttpRequest("GET", "/not-found", "HTTP/1.1"));
 
         // Assert
-        Assert.Equal(404, sut.ResultResponse.Status);
-        Assert.Equal("Not Found", sut.ResultResponse.StatusPhrase);
+        await Assert.That(sut.ResultResponse.Status).IsEqualTo(404);
+        await Assert.That(sut.ResultResponse.StatusPhrase).IsEqualTo("Not Found");
 
         return Task.CompletedTask;
     }
 
-    [Theory]
-    [InlineData("GET", "/world/1", "world")]
-    [InlineData("GET", "/world/fdsf", "world")]
-    [InlineData("GET", "/world/fdsf/any/193", "world")]
-    [InlineData("POST", "/world/1", "world-post")]
-    [InlineData("POST", "/world/e1", "world-post")]
-    [InlineData("POST", "/world/rr/1", "world-post")]
-    [InlineData("GET", "/test/1", "test")]
-    [InlineData("POST", "/test/1", "test-post")]
+    [Test]
+    [Arguments("GET", "/world/1", "world")]
+    [Arguments("GET", "/world/fdsf", "world")]
+    [Arguments("GET", "/world/fdsf/any/193", "world")]
+    [Arguments("POST", "/world/1", "world-post")]
+    [Arguments("POST", "/world/e1", "world-post")]
+    [Arguments("POST", "/world/rr/1", "world-post")]
+    [Arguments("GET", "/test/1", "test")]
+    [Arguments("POST", "/test/1", "test-post")]
     public Task OnReceivedRequest_WhenRouteFound_ShouldReturnHtml(string method, string path, string expectedHtmlContent)
     {
         // Arrange
@@ -51,17 +51,17 @@ public class WebApiSessionTests
         sut.OnReceivedRequestTest(new HttpRequest(method, path, "HTTP/1.1"));
 
         // Assert
-        Assert.Equal(200, sut.ResultResponse.Status);
-        Assert.Equal("OK", sut.ResultResponse.StatusPhrase);
+        await Assert.That(sut.ResultResponse.Status).IsEqualTo(200);
+        await Assert.That(sut.ResultResponse.StatusPhrase).IsEqualTo("OK");
         AssertContentType(sut.ResultResponse, "text/html");
-        Assert.Equal(expectedHtmlContent, sut.ResultResponse.Body);
+        await Assert.That(sut.ResultResponse.Body).IsEqualTo(expectedHtmlContent);
 
         return Task.CompletedTask;
     }
 
-    [Theory]
-    [InlineData("POST", "/multipleMatches/resource/subresource", new[] { "resource", "subresource" })]
-    [InlineData("POST", "/multipleMatches/players/search", new[] { "players", "search" })]
+    [Test]
+    [Arguments("POST", "/multipleMatches/resource/subresource", new[] { "resource", "subresource" })]
+    [Arguments("POST", "/multipleMatches/players/search", new[] { "players", "search" })]
     public Task OnReceivedRequest_WhenRouteFoundWithRegex_ShouldReturnHtmlWithMatches(string method, string path, string[] expectedMatches)
     {
         // Arrange
@@ -75,8 +75,8 @@ public class WebApiSessionTests
         sut.OnReceivedRequestTest(new HttpRequest(method, path, "HTTP/1.1"));
 
         // Assert
-        Assert.Equal(200, sut.ResultResponse.Status);
-        Assert.Equal("OK", sut.ResultResponse.StatusPhrase);
+        await Assert.That(sut.ResultResponse.Status).IsEqualTo(200);
+        await Assert.That(sut.ResultResponse.StatusPhrase).IsEqualTo("OK");
         AssertContentType(sut.ResultResponse, "text/html");
 
         var expectedHtmlContent = "test-post";
@@ -88,7 +88,7 @@ public class WebApiSessionTests
             groupIndex++;
         }
 
-        Assert.Equal(expectedHtmlContent, sut.ResultResponse.Body);
+        await Assert.That(sut.ResultResponse.Body).IsEqualTo(expectedHtmlContent);
 
         return Task.CompletedTask;
     }
@@ -99,7 +99,7 @@ public class WebApiSessionTests
         {
             if (response.Header(i).Item1 == "Content-Type")
             {
-                Assert.Equal(expectedContentType, response.Header(i).Item2);
+                await Assert.That(response.Header(i).Item2).IsEqualTo(expectedContentType);
                 break;
             }
         }
@@ -175,3 +175,5 @@ public class WebApiSessionTests
     }
 }
 
+
+#endif

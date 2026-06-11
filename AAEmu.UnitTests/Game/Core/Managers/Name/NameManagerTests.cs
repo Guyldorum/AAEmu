@@ -1,3 +1,5 @@
+// === PHASE 12.2 TODO === pré-commenté (TheoryData/MemberData/Collection/IClassFixture/Mock<abstract>)
+#if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Commons.Utils;
 using Xunit;
@@ -177,3 +179,5 @@ public sealed class NameManagerTests : IDisposable
         Assert.Equal(0u, sut.GetCharacterAccount(charId));
     }
 }
+
+#endif

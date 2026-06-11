@@ -1,6 +1,4 @@
 ﻿using AAEmu.Game.Core.Network.Game;
-using Xunit;
-
 namespace AAEmu.UnitTests.Game.Core.Network.Game;
 
 /// <summary>
@@ -10,19 +8,19 @@ public class GameNetworkTests
 {
     private readonly GameNetwork _cut = GameNetwork.Instance;
 
-    [Fact]
-    public void Instance_ReturnsSingleton()
+    [Test]
+    public async Task Instance_ReturnsSingleton()
     {
         // Arrange & Act
         var instance1 = GameNetwork.Instance;
         var instance2 = GameNetwork.Instance;
 
         // Assert
-        Assert.Same(instance1, instance2);
+        await Assert.That(instance2).IsSameReferenceAs(instance1);
     }
 
-    [Fact]
-    public void Start_InitializesServer()
+    [Test]
+    public async Task Start_InitializesServer()
     {
         // Arrange
         // Note: This test requires AppConfiguration to be set up
@@ -33,11 +31,11 @@ public class GameNetworkTests
 
         // Assert
         // Verification would require mocking the Server class
-        Assert.True(true, "Start method requires configuration setup");
+        await Assert.That(true).IsTrue();
     }
 
-    [Fact]
-    public void Stop_StopsServer_WhenStarted()
+    [Test]
+    public async Task Stop_StopsServer_WhenStarted()
     {
         // Arrange
         // Note: Stop requires Start to be called first
@@ -47,6 +45,6 @@ public class GameNetworkTests
 
         // Assert
         // Verification would require mocking the Server class
-        Assert.True(true, "Stop method requires server to be started first");
+        await Assert.That(true).IsTrue();
     }
 }

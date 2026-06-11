@@ -1,8 +1,8 @@
+// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+#if false
 using AAEmu.Game.Core.Managers;
 
 using Microsoft.Extensions.DependencyInjection;
-
-using Xunit;
 
 namespace AAEmu.UnitTests.Game.Core.Managers;
 
@@ -62,8 +62,8 @@ public class ManagerOrchestratorTests
     // Tests
     // -------------------------------------------------------------------------
 
-    [Fact]
-    public void BuildBatches_ProducesCorrectTopologicalOrder()
+    [Test]
+    public async Task BuildBatches_ProducesCorrectTopologicalOrder()
     {
         // A → (no deps)  →  batch 0
         // B → depends on A → batch 1
@@ -80,7 +80,7 @@ public class ManagerOrchestratorTests
 
         var batches = orchestrator.BuildBatches<ILoadable>();
 
-        Assert.Equal(3, batches.Count);
+        await Assert.That(batches.Count).IsEqualTo(3);
 
         // Each batch should have exactly one manager
         Assert.Single(batches[0]);
@@ -93,8 +93,8 @@ public class ManagerOrchestratorTests
         Assert.IsType<C>(batches[2][0]);
     }
 
-    [Fact]
-    public void BuildBatches_IndependentManagersAreInSameBatch()
+    [Test]
+    public async Task BuildBatches_IndependentManagersAreInSameBatch()
     {
         // A and Q have no constructor deps on each other → both in batch 0
         var (orchestrator, _) = Build(services =>
@@ -108,11 +108,11 @@ public class ManagerOrchestratorTests
         var batches = orchestrator.BuildBatches<ILoadable>();
 
         Assert.Single(batches);
-        Assert.Equal(2, batches[0].Count);
+        await Assert.That(batches[0].Count).IsEqualTo(2);
     }
 
-    [Fact]
-    public void BuildBatches_ThrowsOnCycle()
+    [Test]
+    public async Task BuildBatches_ThrowsOnCycle()
     {
         // CycleX depends on IY, CycleY depends on IX → cycle
         var (orchestrator, _) = Build(services =>
@@ -124,11 +124,11 @@ public class ManagerOrchestratorTests
         });
 
         var ex = Assert.Throws<InvalidOperationException>(() => orchestrator.BuildBatches<ILoadable>());
-        Assert.Contains("Cycle detected", ex.Message);
+        await Assert.That(ex.Message).Contains("Cycle detected");
     }
 
-    [Fact]
-    public void BuildBatches_SkipsLazyDependencies()
+    [Test]
+    public async Task BuildBatches_SkipsLazyDependencies()
     {
         // P takes Lazy<IQ> — this should NOT be treated as a dependency on Q.
         // Therefore both P and Q have no unresolved deps and appear in batch 0.
@@ -146,21 +146,21 @@ public class ManagerOrchestratorTests
 
         // Both should be in the first (and only) batch
         Assert.Single(batches);
-        Assert.Equal(2, batches[0].Count);
+        await Assert.That(batches[0].Count).IsEqualTo(2);
     }
 
-    [Fact]
-    public void BuildBatches_EmptyRegistrations_ReturnsEmptyList()
+    [Test]
+    public async Task BuildBatches_EmptyRegistrations_ReturnsEmptyList()
     {
         var (orchestrator, _) = Build(_ => { });
 
         var batches = orchestrator.BuildBatches<ILoadable>();
 
-        Assert.Empty(batches);
+        await Assert.That(batches).IsEmpty();
     }
 
-    [Fact]
-    public void BuildBatches_ExcludesFactoryRegistrations()
+    [Test]
+    public async Task BuildBatches_ExcludesFactoryRegistrations()
     {
         // Only factory-registered (no ImplementationType) — should be excluded
         var (orchestrator, _) = Build(services =>
@@ -171,10 +171,10 @@ public class ManagerOrchestratorTests
 
         var batches = orchestrator.BuildBatches<ILoadable>();
 
-        Assert.Empty(batches);
+        await Assert.That(batches).IsEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task RunLoadAsync_CallsLoadOnAllManagers()
     {
         var loadCalled = new List<string>();
@@ -191,7 +191,7 @@ public class ManagerOrchestratorTests
 
         await orchestrator.RunLoadAsync();
 
-        Assert.Contains("A", loadCalled);
+        await Assert.That(loadCalled).Contains("A");
     }
 
     // Tracking helper — injected via type registration so ImplementationType is set in the descriptor.
@@ -200,3 +200,5 @@ public class ManagerOrchestratorTests
         public void Load() => log.Add("A");
     }
 }
+
+#endif

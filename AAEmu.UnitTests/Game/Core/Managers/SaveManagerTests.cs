@@ -1,22 +1,19 @@
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
-using Moq;
-using Xunit;
-
 namespace AAEmu.UnitTests.Game.Core.Managers;
 
 public class SaveManagerTests
 {
-    [Fact]
-    public void Constructor_DoesNotCallDeps()
+    [Test]
+    public async Task Constructor_DoesNotCallDeps()
     {
-        var mockTask = new Mock<ITaskManager>();
-        var mockHousing = new Mock<IHousingManager>();
-        var mockMail = new Mock<IMailManager>();
-        var mockItem = new Mock<IItemManager>();
-        var mockAuction = new Mock<IAuctionManager>();
-        var mockCrime = new Mock<ICrimeManager>();
-        var mockWorld = new Mock<IWorldManager>();
+        var mockTask = Mock.Of<ITaskManager>();
+        var mockHousing = Mock.Of<IHousingManager>();
+        var mockMail = Mock.Of<IMailManager>();
+        var mockItem = Mock.Of<IItemManager>();
+        var mockAuction = Mock.Of<IAuctionManager>();
+        var mockCrime = Mock.Of<ICrimeManager>();
+        var mockWorld = Mock.Of<IWorldManager>();
 
         var manager = new SaveManager(
             mockTask.Object,
@@ -27,13 +24,13 @@ public class SaveManagerTests
             mockCrime.Object,
             mockWorld.Object);
 
-        Assert.NotNull(manager);
-        mockTask.VerifyNoOtherCalls();
-        mockHousing.VerifyNoOtherCalls();
-        mockMail.VerifyNoOtherCalls();
-        mockItem.VerifyNoOtherCalls();
-        mockAuction.VerifyNoOtherCalls();
-        mockCrime.VerifyNoOtherCalls();
-        mockWorld.VerifyNoOtherCalls();
+        await Assert.That(manager).IsNotNull();
+        Mock.VerifyNoOtherCalls(mockTask);
+        Mock.VerifyNoOtherCalls(mockHousing);
+        Mock.VerifyNoOtherCalls(mockMail);
+        Mock.VerifyNoOtherCalls(mockItem);
+        Mock.VerifyNoOtherCalls(mockAuction);
+        Mock.VerifyNoOtherCalls(mockCrime);
+        Mock.VerifyNoOtherCalls(mockWorld);
     }
 }

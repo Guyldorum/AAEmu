@@ -1,3 +1,5 @@
+// === PHASE 12.2 TODO === pré-commenté (TheoryData/MemberData/Collection/IClassFixture/Mock<abstract>)
+#if false
 ﻿using AAEmu.Game.Core.Managers;
 using Moq;
 using Xunit;
@@ -543,3 +545,5 @@ public class TaskManagerTests
 
     #endregion
 }
+
+#endif

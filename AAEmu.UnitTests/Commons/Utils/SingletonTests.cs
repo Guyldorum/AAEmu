@@ -1,7 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using AAEmu.Commons.Utils;
-using Xunit;
-
 namespace AAEmu.UnitTests.Commons.Utils;
 
 public class SingletonTests
@@ -19,17 +17,17 @@ public class SingletonTests
         public DependentSingleton([SuppressMessage("ReSharper", "UnusedParameter.Local")] object dep) { }
     }
 
-    [Fact]
-    public void Instance_WithParameterlessConstructor_ReturnsInstance()
+    [Test]
+    public async Task Instance_WithParameterlessConstructor_ReturnsInstance()
     {
         // Reset by assigning via DI path isn't needed — just ensure it constructs
         // (may already be set from a previous test run; that's fine)
         var instance = LeafSingleton.Instance;
-        Assert.NotNull(instance);
+        await Assert.That(instance).IsNotNull();
     }
 
-    [Fact]
-    public void Instance_WithNoParameterlessConstructor_ThrowsInvalidOperationException()
+    [Test]
+    public async Task Instance_WithNoParameterlessConstructor_ThrowsInvalidOperationException()
     {
         // SingletonContainer.ServiceProvider is null in unit tests
         // so OnInit() reflection fallback is invoked, which should throw

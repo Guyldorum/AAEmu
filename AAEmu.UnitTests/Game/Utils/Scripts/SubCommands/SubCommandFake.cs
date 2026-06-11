@@ -26,7 +26,7 @@ public class SubCommandFake : SubCommandBase
         Parameters = parameters;
     }
 
-    public void BaseSendHelpMessage(IMessageOutput messageOutput)
+    public async Task BaseSendHelpMessage(IMessageOutput messageOutput)
     {
         base.SendHelpMessage(messageOutput);
     }
