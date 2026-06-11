@@ -1657,6 +1657,15 @@ public partial class Npc : Unit
         if (Ai.Owner.HasLineOfSight(abuser))
         {
             var directPath = new List<Vector3> { goal };
+            // [lot-5b.o.1] Reproduce PathNode.FindPath trivial case (posStart.Id == posEnd.Id)
+            // pattern completely. Without setting Position + CurrentTargetPos to start, BCB
+            // would MoveTowards a stale CurrentTargetPos (often a leftover node from a prior
+            // A* path) instead of MoveTowards(goal). The sequence below signals to BCB :
+            //   - dist(NPC, CurrentTargetPos=NPC.pos) = 0 ≤ ModelSize
+            //   - BCB Dequeue() → CurrentTargetPos = goal
+            //   - Next tick : dist(NPC, goal) > range → MoveTowards(goal) ✓
+            Ai.PathNode.Position = start;
+            Ai.PathNode.CurrentTargetPos = start;
             Ai.PathNode.FoundPath = new Queue<Vector3>(directPath);
             return directPath;
         }

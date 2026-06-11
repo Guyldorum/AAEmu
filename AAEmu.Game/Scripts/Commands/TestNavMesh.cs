@@ -91,8 +91,17 @@ public class TestNavMesh : ICommand
             messageOutput.SendMessage($"  HasLineOfSight: {hasLos} (took {(long)losWatch.Elapsed.TotalMicroseconds}us)");
             messageOutput.SendMessage($"  Decision: {decision}");
 
-            // Marker à la cible
-            AddDoodadMarker(world, losGoal, hasLos ? crescentThroneFlagDoodad : stonePostDoodad);
+            // [lot-5b.o.1] Markers améliorés : en mode DIRECT, placer aussi un marker
+            // au point NPC pour visualiser le segment direct NPC→cible.
+            if (hasLos)
+            {
+                AddDoodadMarker(world, losStart, stonePostDoodad);       // origine NPC
+                AddDoodadMarker(world, losGoal, crescentThroneFlagDoodad); // cible (flag)
+            }
+            else
+            {
+                AddDoodadMarker(world, losGoal, stonePostDoodad);
+            }
 
             // Si LoS bloqué, run A* aussi pour montrer le chemin alternatif
             if (!hasLos)
