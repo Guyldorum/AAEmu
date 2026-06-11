@@ -84,28 +84,33 @@ public class TestNavMesh : ICommand
             var hasLos = npc.HasLineOfSight(character);
             losWatch.Stop();
 
-            var decision = hasLos ? "DIRECT" : "ASTAR";
+            // [lot-5b.o.3] Tri-état decision : DIRECT, ASTAR_CLIMB (LoS clair mais
+            // cible en hauteur → A*), ASTAR (LoS bloqué). Mirror exact du check
+            // appliqué dans Npc.FindPath (seuil 1.5m).
+            const float MaxDirectClimbDelta = 1.5f;
+            var verticalDelta = losGoal.Z - losStart.Z;
+            string decision;
+            if (!hasLos) decision = "ASTAR";
+            else if (verticalDelta > MaxDirectClimbDelta) decision = "ASTAR_CLIMB";
+            else decision = "DIRECT";
+
             messageOutput.SendMessage($"[lot-5b.o LoS diag]");
             messageOutput.SendMessage($"  NPC: {npc.Name} (objId={npc.ObjId}, tpl={npc.TemplateId})");
-            messageOutput.SendMessage($"  Distance: {distance:F1}m");
+            messageOutput.SendMessage($"  Distance: {distance:F1}m, verticalDelta: {verticalDelta:F2}m (max {MaxDirectClimbDelta}m for DIRECT)");
             messageOutput.SendMessage($"  HasLineOfSight: {hasLos} (took {(long)losWatch.Elapsed.TotalMicroseconds}us)");
             messageOutput.SendMessage($"  Decision: {decision}");
 
-            // [lot-5b.o.1] Markers améliorés : en mode DIRECT, placer aussi un marker
-            // au point NPC pour visualiser le segment direct NPC→cible.
-            if (hasLos)
+            // [lot-5b.o.3] Markers : DIRECT = segment NPC→cible visualisé via stone+flag.
+            // ASTAR_CLIMB ou ASTAR = run A* pour montrer le chemin alternatif (escalier ou
+            // contournement structure).
+            if (decision == "DIRECT")
             {
-                AddDoodadMarker(world, losStart, stonePostDoodad);       // origine NPC
-                AddDoodadMarker(world, losGoal, crescentThroneFlagDoodad); // cible (flag)
+                AddDoodadMarker(world, losStart, stonePostDoodad);          // origine NPC
+                AddDoodadMarker(world, losGoal, crescentThroneFlagDoodad);  // cible (flag)
             }
             else
             {
                 AddDoodadMarker(world, losGoal, stonePostDoodad);
-            }
-
-            // Si LoS bloqué, run A* aussi pour montrer le chemin alternatif
-            if (!hasLos)
-            {
                 npc.Ai.PathNode.ZoneKey = character.Transform.ZoneId;
                 var fallbackPath = npc.Ai.PathNode.FindPath(
                     npc.ParentWorld, losStart, losGoal, out _).ToList();
@@ -126,10 +131,10 @@ public class TestNavMesh : ICommand
                 using var writer = new StreamWriter(csvFile, append: true);
                 if (needsHeader)
                 {
-                    writer.WriteLine("timestamp;world;npcName;npcObjId;templateId;npcX;npcY;npcZ;targetName;targetX;targetY;targetZ;distance;hasLos;losUs;decision");
+                    writer.WriteLine("timestamp;world;npcName;npcObjId;templateId;npcX;npcY;npcZ;targetName;targetX;targetY;targetZ;distance;verticalDelta;hasLos;losUs;decision");
                 }
                 var ts = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                writer.WriteLine($"{ts};{world.Template.Name};{npc.Name};{npc.ObjId};{npc.TemplateId};{losStart.X:F2};{losStart.Y:F2};{losStart.Z:F2};{character.Name};{losGoal.X:F2};{losGoal.Y:F2};{losGoal.Z:F2};{distance:F2};{hasLos};{(long)losWatch.Elapsed.TotalMicroseconds};{decision}");
+                writer.WriteLine($"{ts};{world.Template.Name};{npc.Name};{npc.ObjId};{npc.TemplateId};{losStart.X:F2};{losStart.Y:F2};{losStart.Z:F2};{character.Name};{losGoal.X:F2};{losGoal.Y:F2};{losGoal.Z:F2};{distance:F2};{verticalDelta:F2};{hasLos};{(long)losWatch.Elapsed.TotalMicroseconds};{decision}");
                 messageOutput.SendMessage($"  CSV: Data/Custom/losnavtest.csv (append)");
             }
             catch (Exception ex)

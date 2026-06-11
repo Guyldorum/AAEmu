@@ -1656,18 +1656,31 @@ public partial class Npc : Unit
         // (cas trivial posStart.Id == posEnd.Id).
         if (Ai.Owner.HasLineOfSight(abuser))
         {
-            var directPath = new List<Vector3> { goal };
-            // [lot-5b.o.1] Reproduce PathNode.FindPath trivial case (posStart.Id == posEnd.Id)
-            // pattern completely. Without setting Position + CurrentTargetPos to start, BCB
-            // would MoveTowards a stale CurrentTargetPos (often a leftover node from a prior
-            // A* path) instead of MoveTowards(goal). The sequence below signals to BCB :
-            //   - dist(NPC, CurrentTargetPos=NPC.pos) = 0 ≤ ModelSize
-            //   - BCB Dequeue() → CurrentTargetPos = goal
-            //   - Next tick : dist(NPC, goal) > range → MoveTowards(goal) ✓
-            Ai.PathNode.Position = start;
-            Ai.PathNode.CurrentTargetPos = start;
-            Ai.PathNode.FoundPath = new Queue<Vector3>(directPath);
-            return directPath;
+            // [lot-5b.o.3] Si la cible est nettement au-dessus, force A* même si LoS
+            // est clair. Le raycast peut passer en ligne droite (par-dessus ou à travers
+            // une structure) mais le NPC ne peut pas physiquement traverser un mur en
+            // montée — il lui faut l'escalier que seul le navmesh A* peut trouver.
+            // Seuil 1.5m = ~3 marches d'escalier. Sur terrain naturel en pente, le
+            // delta Z reste comparable à la distance horizontale et reste sous le seuil
+            // sur courte distance ; sur un escalier vertical, le delta saute brutalement.
+            const float MaxDirectClimbDelta = 1.5f;
+            var verticalDelta = goal.Z - start.Z;
+            if (verticalDelta <= MaxDirectClimbDelta)
+            {
+                var directPath = new List<Vector3> { goal };
+                // [lot-5b.o.1] Reproduce PathNode.FindPath trivial case (posStart.Id == posEnd.Id)
+                // pattern completely. Without setting Position + CurrentTargetPos to start, BCB
+                // would MoveTowards a stale CurrentTargetPos (often a leftover node from a prior
+                // A* path) instead of MoveTowards(goal). The sequence below signals to BCB :
+                //   - dist(NPC, CurrentTargetPos=NPC.pos) = 0 ≤ ModelSize
+                //   - BCB Dequeue() → CurrentTargetPos = goal
+                //   - Next tick : dist(NPC, goal) > range → MoveTowards(goal) ✓
+                Ai.PathNode.Position = start;
+                Ai.PathNode.CurrentTargetPos = start;
+                Ai.PathNode.FoundPath = new Queue<Vector3>(directPath);
+                return directPath;
+            }
+            // LoS clair MAIS cible en hauteur → fall through to A* (escalier requis).
         }
 
         var path = Ai.PathNode.FindPath(Ai.Owner.ParentWorld, start, goal, out _);
