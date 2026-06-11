@@ -526,6 +526,18 @@ public class PhysicsManager
         EnqueueAddBody(slave.RigidBody);
         Buoyancy.AddForRectangularParallelepiped(slave.RigidBody, 3);
 
+        // [lot-10.1.3] Prevent Jitter2 default gravity from acting during the gap
+        // between AddShip and the first Buoyancy.PreStep iteration.
+        // Runtime observed: ~236ms gap during which gravity accumulated velY=-2.3 m/s
+        // (= 9.81 * 0.236), then body glided ~16m during 7s of PortalTime since
+        // Jitter2 linear damping is minimal. Setting AffectedByGravity=false and
+        // zeroing velocities immediately after the body is added to the physics
+        // world prevents this entire chain.
+        slave.RigidBody.AffectedByGravity = false;
+        slave.RigidBody.Velocity = JVector.Zero;
+        slave.RigidBody.AngularVelocity = JVector.Zero;
+        Logger.Info($"[SPAWNDIAG] {slave.Name} AddShip post-add: gravity disabled, velocities zeroed (preventing 236ms gravity gap)");
+
         Logger.Debug($"AddShip {slave.Name} -> {SimulationWorld.Template.Name}");
     }
 
