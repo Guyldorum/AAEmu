@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game;
@@ -56,7 +56,7 @@ public class ExperienceManagerTests
     [Arguments(int.MinValue)]
     public async Task GetLevelFromExp_Invalid_TooSmall_Throws(int exp)
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => _cut.GetLevelFromExp(exp, out _));
+        await Assert.That(() => _cut.GetLevelFromExp(exp, out _)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
@@ -106,7 +106,7 @@ public class ExperienceManagerTests
     [Test]
     public async Task GetLevelFromExp_CurrentLevel_Zero_Throws()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => _cut.GetLevelFromExp(1, 0, out _));
+        await Assert.That(() => _cut.GetLevelFromExp(1, 0, out _)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
@@ -114,7 +114,7 @@ public class ExperienceManagerTests
     [Arguments(int.MinValue, 1)]
     public async Task GetLevelFromExp_CurrentLevel_Invalid_TooSmall_Throws(int exp, byte currentLevel)
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => _cut.GetLevelFromExp(exp, currentLevel, out _));
+        await Assert.That(() => _cut.GetLevelFromExp(exp, currentLevel, out _)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
@@ -207,7 +207,7 @@ public class ExperienceManagerTests
     [Arguments(true)]
     public async Task GetExpNeededToGivenLevel_Invalid_NegativeExpThrows(bool mate)
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => _cut.GetExpNeededToGivenLevel(-1, 1, mate));
+        await Assert.That(() => _cut.GetExpNeededToGivenLevel(-1, 1, mate)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
@@ -242,10 +242,10 @@ public class ExperienceManagerTests
     [Test]
     public async Task Load_CallsLoader()
     {
-        var mockLoader = new Mock<IExperienceLevelTemplateLoader>(MockBehavior.Strict);
+        var mockLoader = new Moq.Mock<IExperienceLevelTemplateLoader>(Moq.MockBehavior.Strict);
         mockLoader.Setup(l => l.Load())
             .Returns(Enumerable.Empty<ExperienceLevelTemplate>())
-            .Verifiable(Times.Once);
+            .Verifiable(Moq.Times.Once);
 
         _cut.Load(mockLoader.Object, 1, 1);
         mockLoader.Verify();
@@ -255,20 +255,20 @@ public class ExperienceManagerTests
     public async Task Load_ResetsState()
     {
         // arrange
-        var mockLoader1 = new Mock<IExperienceLevelTemplateLoader>(MockBehavior.Strict);
+        var mockLoader1 = new Moq.Mock<IExperienceLevelTemplateLoader>(Moq.MockBehavior.Strict);
         mockLoader1.Setup(l => l.Load())
             .Returns([
                 new ExperienceLevelTemplate { Level = 1, TotalExp = 0, TotalMateExp = 0 },
                 new ExperienceLevelTemplate { Level = 2, TotalExp = 100, TotalMateExp = 100 }
             ])
-            .Verifiable(Times.Once);
+            .Verifiable(Moq.Times.Once);
 
-        var mockLoader2 = new Mock<IExperienceLevelTemplateLoader>(MockBehavior.Strict);
+        var mockLoader2 = new Moq.Mock<IExperienceLevelTemplateLoader>(Moq.MockBehavior.Strict);
         mockLoader2.Setup(l => l.Load())
             .Returns([
                 new ExperienceLevelTemplate { Level = 1, TotalExp = 0, TotalMateExp = 0 }
             ])
-            .Verifiable(Times.Once);
+            .Verifiable(Moq.Times.Once);
 
         _cut.Load(mockLoader1.Object, 2, 2);
 
@@ -293,13 +293,13 @@ public class ExperienceManagerTests
     [Arguments(3, 1, 2, 1)]
     public async Task Load_SetsMaxLevel(byte playerLevelCap, byte mateLevelCap, byte expectedMaxPlayerLevel, byte expectedMaxMateLevel)
     {
-        var mockLoader = new Mock<IExperienceLevelTemplateLoader>(MockBehavior.Strict);
+        var mockLoader = new Moq.Mock<IExperienceLevelTemplateLoader>(Moq.MockBehavior.Strict);
         mockLoader.Setup(l => l.Load())
             .Returns([
                 new ExperienceLevelTemplate { Level = 1, TotalExp = 0, TotalMateExp = 0 },
                 new ExperienceLevelTemplate { Level = 2, TotalExp = 100, TotalMateExp = 100 }
             ])
-            .Verifiable(Times.Once);
+            .Verifiable(Moq.Times.Once);
 
         _cut.Load(mockLoader.Object, playerLevelCap, mateLevelCap);
 
@@ -310,10 +310,11 @@ public class ExperienceManagerTests
 
     private void SetupExperienceManager(ExperienceLevelTemplate[] levelTemplates)
     {
-        var mockLoader = new Mock<IExperienceLevelTemplateLoader>(MockBehavior.Strict);
+        var mockLoader = new Moq.Mock<IExperienceLevelTemplateLoader>(Moq.MockBehavior.Strict);
         mockLoader.Setup(x => x.Load()).Returns(levelTemplates);
         _cut.Load(mockLoader.Object, (byte)levelTemplates.Length, (byte)levelTemplates.Length);
     }
 }
+
 
 #endif

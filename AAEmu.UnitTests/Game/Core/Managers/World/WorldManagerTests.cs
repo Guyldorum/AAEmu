@@ -1,5 +1,3 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
-#if false
 ﻿using System.Collections.Concurrent;
 using System.Reflection;
 
@@ -177,7 +175,7 @@ public class WorldManagerTests
 
         // Assert
         await Assert.That(result).IsNotNull();
-        Assert.Single(result);
+        await Assert.That(result).HasSingleItem();
     }
 
     #endregion
@@ -229,7 +227,7 @@ public class WorldManagerTests
         SetPrivateField(manager, "WorldTemplates", templates);
 
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => manager.GetWorldTemplateByName(null));
+        await Assert.That(() => manager.GetWorldTemplateByName(null)).Throws<ArgumentNullException>();
     }
 
     #endregion
@@ -1062,7 +1060,7 @@ public class WorldManagerTests
         var manager = CreateWorldManager();
 
         // Act & Assert
-        Assert.Throws<NullReferenceException>(() => manager.TryAddCharacter(null));
+        await Assert.That(() => manager.TryAddCharacter(null)).Throws<NullReferenceException>();
     }
 
     [Test]
@@ -1230,4 +1228,3 @@ public class WorldManagerTests
     #endregion
 }
 
-#endif

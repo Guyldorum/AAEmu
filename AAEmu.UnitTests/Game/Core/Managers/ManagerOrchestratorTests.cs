@@ -1,5 +1,3 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
-#if false
 using AAEmu.Game.Core.Managers;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -83,14 +81,14 @@ public class ManagerOrchestratorTests
         await Assert.That(batches.Count).IsEqualTo(3);
 
         // Each batch should have exactly one manager
-        Assert.Single(batches[0]);
-        Assert.Single(batches[1]);
-        Assert.Single(batches[2]);
+        await Assert.That(batches[0]).HasSingleItem();
+        await Assert.That(batches[1]).HasSingleItem();
+        await Assert.That(batches[2]).HasSingleItem();
 
         // Verify order: A first, then B, then C
-        Assert.IsType<A>(batches[0][0]);
-        Assert.IsType<B>(batches[1][0]);
-        Assert.IsType<C>(batches[2][0]);
+        await Assert.That(batches[0][0]).IsTypeOf<A>();
+        await Assert.That(batches[1][0]).IsTypeOf<B>();
+        await Assert.That(batches[2][0]).IsTypeOf<C>();
     }
 
     [Test]
@@ -107,7 +105,7 @@ public class ManagerOrchestratorTests
 
         var batches = orchestrator.BuildBatches<ILoadable>();
 
-        Assert.Single(batches);
+        await Assert.That(batches).HasSingleItem();
         await Assert.That(batches[0].Count).IsEqualTo(2);
     }
 
@@ -123,7 +121,7 @@ public class ManagerOrchestratorTests
             services.AddSingleton<IY>(sp => sp.GetRequiredService<CycleY>());
         });
 
-        var ex = Assert.Throws<InvalidOperationException>(() => orchestrator.BuildBatches<ILoadable>());
+        var ex = await Assert.That(() => orchestrator.BuildBatches<ILoadable>()).Throws<InvalidOperationException>();
         await Assert.That(ex.Message).Contains("Cycle detected");
     }
 
@@ -145,7 +143,7 @@ public class ManagerOrchestratorTests
         var batches = orchestrator.BuildBatches<ILoadable>();
 
         // Both should be in the first (and only) batch
-        Assert.Single(batches);
+        await Assert.That(batches).HasSingleItem();
         await Assert.That(batches[0].Count).IsEqualTo(2);
     }
 
@@ -201,4 +199,3 @@ public class ManagerOrchestratorTests
     }
 }
 
-#endif

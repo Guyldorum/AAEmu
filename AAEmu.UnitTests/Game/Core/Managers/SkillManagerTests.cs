@@ -1,5 +1,3 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
-#if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.NPChar;
@@ -384,7 +382,7 @@ public class SkillManagerTests
 
         // Assert
         await Assert.That(result).IsNotNull();
-        Assert.Single(result);
+        await Assert.That(result).HasSingleItem();
     }
 
     #endregion
@@ -412,7 +410,7 @@ public class SkillManagerTests
 
         // Assert
         await Assert.That(result).IsNotNull();
-        Assert.Single(result);
+        await Assert.That(result).HasSingleItem();
     }
 
     #endregion
@@ -440,7 +438,7 @@ public class SkillManagerTests
 
         // Assert
         await Assert.That(result).IsNotNull();
-        Assert.Single(result);
+        await Assert.That(result).HasSingleItem();
     }
 
     #endregion
@@ -468,7 +466,7 @@ public class SkillManagerTests
 
         // Assert
         await Assert.That(result).IsNotNull();
-        Assert.Single(result);
+        await Assert.That(result).HasSingleItem();
     }
 
     #endregion
@@ -496,7 +494,7 @@ public class SkillManagerTests
 
         // Assert
         await Assert.That(result).IsNotNull();
-        Assert.Single(result);
+        await Assert.That(result).HasSingleItem();
     }
 
     #endregion
@@ -689,4 +687,3 @@ public class SkillManagerTests
     #endregion
 }
 
-#endif

@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
@@ -20,14 +20,14 @@ public class QuestTests
     {
         // Arrange
         var quest = SetupQuest(out var mockOwner, out var mockQuestTemplate, out _, out _, out _, out _, out _);
-        mockQuestTemplate.Setup(qt => qt.GetComponents(It.IsAny<QuestComponentKind>())).Returns([]);
+        mockQuestTemplate.Setup(qt => qt.GetComponents(Moq.It.IsAny<QuestComponentKind>())).Returns([]);
 
         // Act
         var result = quest.StartQuest();
 
         // Assert
         await Assert.That(result).IsFalse();
-        mockOwner.Verify(o => o.SendPacket(It.IsAny<SCQuestContextStartedPacket>()), Times.Once);
+        mockOwner.Verify(o => o.SendPacket(Moq.It.IsAny<SCQuestContextStartedPacket>()), Moq.Times.Once);
     }
 
     // [Test]
@@ -37,7 +37,7 @@ public class QuestTests
         var quest = SetupQuest(out var mockOwner, out var mockQuestTemplate, out var mockQuestManager, out _, out _, out _, out _);
         var expectedIds = new List<uint>();
 
-        mockQuestTemplate.Setup(qt => qt.GetComponents(It.IsAny<QuestComponentKind>()))
+        mockQuestTemplate.Setup(qt => qt.GetComponents(Moq.It.IsAny<QuestComponentKind>()))
             .Returns<QuestComponentKind>(kind => [new QuestComponentTemplate(null) { KindId = kind }])
             .Callback<QuestComponentKind>(d => expectedIds.Add((uint)d));
 
@@ -48,9 +48,9 @@ public class QuestTests
         await Assert.That(result).IsFalse();
         foreach (var exceptedId in expectedIds)
         {
-            mockQuestManager.Verify(qm => qm.GetActsInComponent(It.IsIn(exceptedId)), Times.Once);
+            mockQuestManager.Verify(qm => qm.GetActsInComponent(Moq.It.IsIn(exceptedId)), Moq.Times.Once);
         }
-        mockOwner.Verify(o => o.SendPacket(It.IsAny<SCQuestContextStartedPacket>()), Times.Once);
+        mockOwner.Verify(o => o.SendPacket(Moq.It.IsAny<SCQuestContextStartedPacket>()), Moq.Times.Once);
     }
 
     // [Test]
@@ -60,15 +60,15 @@ public class QuestTests
         var quest = SetupQuest(out var mockOwner, out var mockQuestTemplate, out var mockQuestManager, out _, out _, out _, out _);
         var expectedIds = new List<uint>();
 
-        mockQuestTemplate.Setup(qt => qt.GetComponents(It.IsAny<QuestComponentKind>())).Returns<QuestComponentKind>(kind => [
+        mockQuestTemplate.Setup(qt => qt.GetComponents(Moq.It.IsAny<QuestComponentKind>())).Returns<QuestComponentKind>(kind => [
             new QuestComponentTemplate(null) { Id = (uint)kind }
         ]).Callback<QuestComponentKind>(d => expectedIds.Add((uint)d));
 
         var mockQuestAct = Mock.Of<QuestActTemplate>();
-        mockQuestAct.Setup(qa => qa.RunAct(It.IsAny<Quest>(), It.IsAny<QuestAct>(), It.IsAny<int>())).Returns(false);
+        mockQuestAct.Setup(qa => qa.RunAct(Moq.It.IsAny<Quest>(), Moq.It.IsAny<QuestAct>(), Moq.It.IsAny<int>())).Returns(false);
         mockQuestAct.SetupGet(qa => qa.DetailType).Returns("QuestActConAcceptNpc");
 
-        mockQuestManager.Setup(qm => qm.GetActsInComponent(It.IsAny<uint>())).Returns(new[] {
+        mockQuestManager.Setup(qm => qm.GetActsInComponent(Moq.It.IsAny<uint>())).Returns(new[] {
             mockQuestAct.Object
         }.ToList());
 
@@ -79,9 +79,9 @@ public class QuestTests
         await Assert.That(result).IsFalse();
         foreach (var exceptedId in expectedIds)
         {
-            mockQuestManager.Verify(qm => qm.GetActsInComponent(It.IsIn(exceptedId)), Times.Once);
+            mockQuestManager.Verify(qm => qm.GetActsInComponent(Moq.It.IsIn(exceptedId)), Moq.Times.Once);
         }
-        mockOwner.Verify(o => o.SendPacket(It.IsAny<SCQuestContextStartedPacket>()), Times.Never);
+        mockOwner.Verify(o => o.SendPacket(Moq.It.IsAny<SCQuestContextStartedPacket>()), Moq.Times.Never);
     }
 
     // [Test]
@@ -95,14 +95,14 @@ public class QuestTests
             { 1, new QuestComponentTemplate(null) { Id = 1, KindId = QuestComponentKind.Drop } },
             { 2, new QuestComponentTemplate(null) { Id = 2, KindId = QuestComponentKind.Drop } }
         });
-        mockQuestTemplate.Setup(qt => qt.GetComponents(It.IsAny<QuestComponentKind>())).Returns<QuestComponentKind>(kind => [
+        mockQuestTemplate.Setup(qt => qt.GetComponents(Moq.It.IsAny<QuestComponentKind>())).Returns<QuestComponentKind>(kind => [
             new QuestComponentTemplate(null) { Id = (uint)kind }
         ]);
 
         var mockQuestAct = Mock.Of<QuestActTemplate>();
-        mockQuestAct.Setup(qa => qa.RunAct(It.IsAny<Quest>(), It.IsAny<QuestAct>(), It.IsAny<int>())).Returns(true);
+        mockQuestAct.Setup(qa => qa.RunAct(Moq.It.IsAny<Quest>(), Moq.It.IsAny<QuestAct>(), Moq.It.IsAny<int>())).Returns(true);
         mockQuestAct.SetupGet(qa => qa.DetailType).Returns("QuestActConAcceptNpc");
-        mockQuestManager.Setup(qm => qm.GetActsInComponent(It.IsAny<uint>())).Returns(new[] {
+        mockQuestManager.Setup(qm => qm.GetActsInComponent(Moq.It.IsAny<uint>())).Returns(new[] {
             mockQuestAct.Object
         }.ToList);
 
@@ -111,18 +111,18 @@ public class QuestTests
 
         // Assert
         await Assert.That(result).IsTrue();
-        mockOwner.Verify(o => o.UseSkill(It.IsAny<uint>(), It.IsAny<ICharacter>()), Times.Never);
-        mockOwner.Verify(o => o.SendPacket(It.IsAny<SCQuestContextStartedPacket>()), Times.Once);
+        mockOwner.Verify(o => o.UseSkill(Moq.It.IsAny<uint>(), Moq.It.IsAny<ICharacter>()), Moq.Times.Never);
+        mockOwner.Verify(o => o.SendPacket(Moq.It.IsAny<SCQuestContextStartedPacket>()), Moq.Times.Once);
     }
 
     private static Quest SetupQuest(
-        out Mock<ICharacter> mockCharacter,
-        out Mock<IQuestTemplate> mockQuestTemplate,
-        out Mock<IQuestManager> mockQuestManager,
-        out Mock<TaskManager> mockTaskManager,
-        out Mock<ISkillManager> mockSkillManager,
-        out Mock<IExpressTextManager> mockExpressTextManager,
-        out Mock<IWorldManager> mockWorldManager)
+        out Moq.Mock<ICharacter> mockCharacter,
+        out Moq.Mock<IQuestTemplate> mockQuestTemplate,
+        out Moq.Mock<IQuestManager> mockQuestManager,
+        out Moq.Mock<TaskManager> mockTaskManager,
+        out Moq.Mock<ISkillManager> mockSkillManager,
+        out Moq.Mock<IExpressTextManager> mockExpressTextManager,
+        out Moq.Mock<IWorldManager> mockWorldManager)
     {
         mockCharacter = Mock.Of<ICharacter>();
         mockQuestManager = Mock.Of<IQuestManager>();
@@ -147,5 +147,6 @@ public class QuestTests
         return quest;
     }
 }
+
 
 #endif

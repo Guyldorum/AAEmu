@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
@@ -250,7 +250,7 @@ public class ItemManagerTests
         var manager = CreateItemManager();
 
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => manager.AddItem(null));
+        await Assert.That(() => manager.AddItem(null)).Throws<ArgumentNullException>();
     }
 
     #endregion
@@ -546,7 +546,7 @@ public class ItemManagerTests
         // Assert
         await Assert.That(result).IsNotNull();
         await Assert.That(result.Id).IsEqualTo(10u);
-        Assert.Single(result.Bonuses);
+        await Assert.That(result.Bonuses).HasSingleItem();
         await Assert.That(result.Bonuses.First().NumPieces).IsEqualTo(3);
     }
 
@@ -815,7 +815,7 @@ public class ItemManagerTests
         // Assert
         await Assert.That(manager.GetItemByItemId(3000)).IsNull();
         await Assert.That(removedItems).Contains(3000ul);
-        mockItemId.Verify(x => x.ReleaseId(3000), Times.Once);
+        mockItemId.Verify(x => x.ReleaseId(3000), Moq.Times.Once);
     }
 
     [Test]
@@ -833,7 +833,7 @@ public class ItemManagerTests
         manager.ReleaseId(0);
 
         // Assert
-        Assert.DoesNotContain(0ul, removedItems);
+        await Assert.That(removedItems).DoesNotContain(0ul);
     }
 
     #endregion
@@ -1061,12 +1061,12 @@ public class ItemManagerTests
     #region Helper Methods
 
     private static ItemManager CreateItemManager(
-        Mock<ISkillManager> mockSkill = null,
-        Mock<IItemIdManager> mockItemId = null,
-        Mock<IContainerIdManager> mockContainerId = null,
-        Mock<ILocalizationManager> mockLocale = null,
-        Mock<ITaskManager> mockTask = null,
-        Mock<IWorldManager> mockWorld = null)
+        Moq.Mock<ISkillManager> mockSkill = null,
+        Moq.Mock<IItemIdManager> mockItemId = null,
+        Moq.Mock<IContainerIdManager> mockContainerId = null,
+        Moq.Mock<ILocalizationManager> mockLocale = null,
+        Moq.Mock<ITaskManager> mockTask = null,
+        Moq.Mock<IWorldManager> mockWorld = null)
     {
         return new ItemManager(
             (mockSkill ?? Mock.Of<ISkillManager>()).Object,
@@ -1098,5 +1098,6 @@ public class ItemManagerTests
 
     #endregion
 }
+
 
 #endif

@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using System.Numerics;
 
@@ -131,9 +131,9 @@ namespace AAEmu.UnitTests.Commons.Network
             stream.Rollback();
 
             (var rx, var ry, var rz) = stream.ReadPosition();
-            Assert.InRange(rx, x - 0.01f, x + 0.01f);
-            Assert.InRange(ry, y - 0.01f, y + 0.01f);
-            Assert.InRange(rz, z - 0.01f, z + 0.01f);
+            await Assert.That(rx).IsBetween(x - 0.01f, x + 0.01f);
+            await Assert.That(ry).IsBetween(y - 0.01f, y + 0.01f);
+            await Assert.That(rz).IsBetween(z - 0.01f, z + 0.01f);
         }
 
         [Test]
@@ -147,11 +147,12 @@ namespace AAEmu.UnitTests.Commons.Network
 
             var result = stream.ReadQuaternionShort();
             // Проверяем приближенность для x, y, z, так как w вычисляется через норму
-            Assert.InRange(result.X, q.X - 0.1f, q.X + 0.1f);
-            Assert.InRange(result.Y, q.Y - 0.1f, q.Y + 0.1f);
-            Assert.InRange(result.Z, q.Z - 0.1f, q.Z + 0.1f);
+            await Assert.That(result.X).IsBetween(q.X - 0.1f, q.X + 0.1f);
+            await Assert.That(result.Y).IsBetween(q.Y - 0.1f, q.Y + 0.1f);
+            await Assert.That(result.Z).IsBetween(q.Z - 0.1f, q.Z + 0.1f);
         }
     }
 }
+
 
 #endif

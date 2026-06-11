@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
@@ -103,7 +103,7 @@ public class CharacterManagerTests
         SetPrivateField(manager, "_templates", templates);
 
         // Act & Assert
-        Assert.Throws<KeyNotFoundException>(() => manager.GetTemplate(Race.Nuian, Gender.Male));
+        await Assert.That(() => manager.GetTemplate(Race.Nuian, Gender.Male)).Throws<KeyNotFoundException>();
     }
 
     [Test]
@@ -218,7 +218,7 @@ public class CharacterManagerTests
         SetPrivateField(manager, "_expands", expandsDict);
 
         // Act & Assert
-        Assert.Throws<KeyNotFoundException>(() => manager.GetExpands(999));
+        await Assert.That(() => manager.GetExpands(999)).Throws<KeyNotFoundException>();
     }
 
     #endregion
@@ -252,7 +252,7 @@ public class CharacterManagerTests
         SetPrivateField(manager, "_actabilities", actabilities);
 
         // Act & Assert
-        Assert.Throws<KeyNotFoundException>(() => manager.GetActability(999));
+        await Assert.That(() => manager.GetActability(999)).Throws<KeyNotFoundException>();
     }
 
     #endregion
@@ -566,7 +566,7 @@ public class CharacterManagerTests
         SetPrivateField(manager, "_expands", expandsDict);
 
         // Act & Assert
-        Assert.Throws<KeyNotFoundException>(() => manager.GetExpands(0));
+        await Assert.That(() => manager.GetExpands(0)).Throws<KeyNotFoundException>();
     }
 
     [Test]
@@ -660,17 +660,17 @@ public class CharacterManagerTests
     #region Helper Methods
 
     private static CharacterManager CreateCharacterManager(
-        Mock<IWorldManager> mockWorldManager = null,
-        Mock<IAccountManager> mockAccountManager = null,
-        Mock<INameManager> mockNameManager = null,
-        Mock<ICharacterIdManager> mockCharacterIdManager = null,
-        Mock<IFactionManager> mockFactionManager = null,
-        Mock<ISkillManager> mockSkillManager = null,
-        Mock<IItemManager> mockItemManager = null,
-        Mock<IHousingManager> mockHousingManager = null,
-        Mock<IFamilyManager> mockFamilyManager = null,
-        Mock<IMailManager> mockMailManager = null,
-        Mock<ITaskManager> mockTaskManager = null)
+        Moq.Mock<IWorldManager> mockWorldManager = null,
+        Moq.Mock<IAccountManager> mockAccountManager = null,
+        Moq.Mock<INameManager> mockNameManager = null,
+        Moq.Mock<ICharacterIdManager> mockCharacterIdManager = null,
+        Moq.Mock<IFactionManager> mockFactionManager = null,
+        Moq.Mock<ISkillManager> mockSkillManager = null,
+        Moq.Mock<IItemManager> mockItemManager = null,
+        Moq.Mock<IHousingManager> mockHousingManager = null,
+        Moq.Mock<IFamilyManager> mockFamilyManager = null,
+        Moq.Mock<IMailManager> mockMailManager = null,
+        Moq.Mock<ITaskManager> mockTaskManager = null)
     {
         return new CharacterManager(
             (mockWorldManager ?? Mock.Of<IWorldManager>()).Object,
@@ -694,5 +694,6 @@ public class CharacterManagerTests
 
     #endregion
 }
+
 
 #endif

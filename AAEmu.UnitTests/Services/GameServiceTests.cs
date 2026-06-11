@@ -1,5 +1,3 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
-#if false
 ﻿using AAEmu.Game;
 using AAEmu.Game.Core.Managers;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,7 +50,7 @@ public class GameServiceTests
         using var service = new GameService(sp, orchestrator);
 
         // Assert
-        Assert.IsAssignableFrom<IHostedService>(service);
+        await Assert.That(service).IsAssignableTo<IHostedService>();
     }
 
     [Test]
@@ -64,7 +62,7 @@ public class GameServiceTests
         using var service = new GameService(sp, orchestrator);
 
         // Assert
-        Assert.IsAssignableFrom<IDisposable>(service);
+        await Assert.That(service).IsAssignableTo<IDisposable>();
     }
 
     [Test]
@@ -81,4 +79,3 @@ public class GameServiceTests
     }
 }
 
-#endif

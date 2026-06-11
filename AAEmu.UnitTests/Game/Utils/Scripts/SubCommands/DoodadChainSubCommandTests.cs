@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Units;
@@ -12,7 +12,7 @@ public class DoodadChainSubCommandTests
     public async Task PreExecute_WhenChain_ShouldCallChainSubCommand()
     {
         var mockSubCommand = Mock.Of<ICommandV2>();
-        var mockUnitCustomModelParams = new Mock<UnitCustomModelParams>(UnitCustomModelType.None);
+        var mockUnitCustomModelParams = new Moq.Mock<UnitCustomModelParams>(UnitCustomModelType.None);
         var fakeCharacter = new Character(mockUnitCustomModelParams.Object);
 
         var command = new TestCommand(new Dictionary<ICommandV2, string[]>
@@ -24,14 +24,14 @@ public class DoodadChainSubCommandTests
 
         command.PreExecute(fakeCharacter, "test", ["sdf", "123"], new CharacterMessageOutput(fakeCharacter));
 
-        mockSubCommand.Verify(s => s.PreExecute(It.IsIn(fakeCharacter), It.IsIn("sdf"), It.Is<string[]>(a => a.Length == 1 && a[0] == "123"), It.IsAny<IMessageOutput>()));
+        mockSubCommand.Verify(s => s.PreExecute(Moq.It.IsIn(fakeCharacter), Moq.It.IsIn("sdf"), Moq.It.Is<string[]>(a => a.Length == 1 && a[0] == "123"), Moq.It.IsAny<IMessageOutput>()));
     }
 
     [Test]
     public async Task PreExecute_WhenChain_ShouldCallChainSubSubCommand()
     {
         var mockSubSubCommand = Mock.Of<ICommandV2>();
-        var mockUnitCustomModelParams = new Mock<UnitCustomModelParams>(UnitCustomModelType.None);
+        var mockUnitCustomModelParams = new Moq.Mock<UnitCustomModelParams>(UnitCustomModelType.None);
         var fakeCharacter = new Character(mockUnitCustomModelParams.Object);
 
         var subCommand = new SubTestCommand(new Dictionary<ICommandV2, string[]>
@@ -50,13 +50,13 @@ public class DoodadChainSubCommandTests
 
         command.PreExecute(fakeCharacter, "test", ["first", "second", "parameter1second", "parameter2second"], new CharacterMessageOutput(fakeCharacter));
 
-        mockSubSubCommand.Verify(s => s.PreExecute(It.IsIn(fakeCharacter), It.IsIn("second"), It.Is<string[]>(a => a.Length == 2 && a[0] == "parameter1second" && a[1] == "parameter2second"), It.IsAny<IMessageOutput>()));
+        mockSubSubCommand.Verify(s => s.PreExecute(Moq.It.IsIn(fakeCharacter), Moq.It.IsIn("second"), Moq.It.Is<string[]>(a => a.Length == 2 && a[0] == "parameter1second" && a[1] == "parameter2second"), Moq.It.IsAny<IMessageOutput>()));
     }
 
     [Test]
     public async Task Execute_WhenOnlyCommand_ShouldNotThrowException()
     {
-        var mockUnitCustomModelParams = new Mock<UnitCustomModelParams>(UnitCustomModelType.None);
+        var mockUnitCustomModelParams = new Moq.Mock<UnitCustomModelParams>(UnitCustomModelType.None);
         var fakeCharacter = new Character(mockUnitCustomModelParams.Object);
 
         var mockMessageOutput = Mock.Of<IMessageOutput>();
@@ -72,7 +72,7 @@ public class DoodadChainSubCommandTests
     {
         var mockCharacter = Mock.Of<ICharacter>();
         var supportedCommands = new Dictionary<ICommandV2, string[]>();
-        var mockSubCommands = new List<Mock<ICommandV2>>();
+        var mockSubCommands = new List<Moq.Mock<ICommandV2>>();
         var expectedCommands = new List<string>();
         for (var i = 0; i < numberOfSupportedCommands; i++)
         {
@@ -88,9 +88,9 @@ public class DoodadChainSubCommandTests
         testCommand.PreExecute(mockCharacter.Object, "test", ["help"], new CharacterMessageOutput(mockCharacter.Object));
 
         // TODO: Fix these tests
-        // mockCharacter.Verify(c => c.SendMessage(It.IsAny<ChatType>(), It.IsIn($"{testCommandPrefix} {testCommand.Description}"), It.IsIn(Color.LawnGreen)), Times.Once);
-        // mockCharacter.Verify(c => c.SendMessage(It.IsAny<ChatType>(), It.Is<string>(s => s.Contains($"{string.Join("||", expectedCommands)}")), It.IsIn(Color.LawnGreen)), Times.Once);
-        // mockCharacter.Verify(c => c.SendMessage(It.IsAny<ChatType>(), It.Is<string>(s => s.Contains("For more details use")), It.IsIn(Color.LawnGreen)), Times.Once);
+        // mockCharacter.Verify(c => c.SendMessage(Moq.It.IsAny<ChatType>(), Moq.It.IsIn($"{testCommandPrefix} {testCommand.Description}"), Moq.It.IsIn(Color.LawnGreen)), Moq.Times.Once);
+        // mockCharacter.Verify(c => c.SendMessage(Moq.It.IsAny<ChatType>(), Moq.It.Is<string>(s => s.Contains($"{string.Join("||", expectedCommands)}")), Moq.It.IsIn(Color.LawnGreen)), Moq.Times.Once);
+        // mockCharacter.Verify(c => c.SendMessage(Moq.It.IsAny<ChatType>(), Moq.It.Is<string>(s => s.Contains("For more details use")), Moq.It.IsIn(Color.LawnGreen)), Moq.Times.Once);
     }
 
     public class TestCommand : SubCommandBase
@@ -108,5 +108,6 @@ public class DoodadChainSubCommandTests
         public SubTestCommand(Dictionary<ICommandV2, string[]> register) : base(register) { }
     }
 }
+
 
 #endif

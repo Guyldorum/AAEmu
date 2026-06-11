@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
@@ -13,7 +13,7 @@ public class ShipyardManagerTests
     public async Task Initialize_SchedulesTick()
     {
         var mockTask = Mock.Of<ITaskManager>();
-        mockTask.Setup(t => t.Schedule(It.IsAny<AaEmuTask>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>())).Returns(true);
+        mockTask.Setup(t => t.Schedule(Moq.It.IsAny<AaEmuTask>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>())).Returns(true);
         var manager = new ShipyardManager(
             mockTask.Object,
             Mock.Of<IObjectIdManager>().Object,
@@ -23,8 +23,9 @@ public class ShipyardManagerTests
             Mock.Of<ISkillManager>().Object);
         manager.Initialize();
 
-        mockTask.Verify(t => t.Schedule(It.IsAny<AaEmuTask>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>()), Times.Once);
+        mockTask.Verify(t => t.Schedule(Moq.It.IsAny<AaEmuTask>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>()), Moq.Times.Once);
     }
 }
+
 
 #endif

@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿#pragma warning disable CS0618 // Type or member is obsolete
 
@@ -125,8 +125,8 @@ public class NumericSubCommandParameterTests
         var constructedType = classType.MakeGenericType(type);
         var displayName = "invalid Config Range Parameter";
         // Act & Assert
-        var exception = Assert.Throws<TargetInvocationException>(() => Activator.CreateInstance(constructedType, "invalidConfigRangeParameter", displayName, true, minValue, maxValue));
-        Assert.IsType<ArgumentOutOfRangeException>(exception.InnerException);
+        var exception = await Assert.That(() => Activator.CreateInstance(constructedType, "invalidConfigRangeParameter", displayName, true, minValue, maxValue)).Throws<TargetInvocationException>();
+        await Assert.That(exception.InnerException).IsTypeOf<ArgumentOutOfRangeException>();
         await Assert.That(exception.InnerException.Message).Contains($"Parameter [{displayName}] minimum value {minValue} must be less than or equal to maximum value");
     }
 
@@ -187,5 +187,6 @@ public class NumericSubCommandParameterTests
         await Assert.That(parameterResult.Value.GetValue()).IsEqualTo(expectedReturn);
     }
 }
+
 
 #endif

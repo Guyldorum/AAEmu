@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿#pragma warning disable CS0618 // Type or member is obsolete
 
@@ -40,7 +40,7 @@ public class SubCommandBaseTests
             for (var i = arguments.Length; i < parameters.Count; i++)
             {
                 // TODO: Fix this test
-                // mockCharacter.Verify(c => c.SendMessage(It.IsIn(ChatType.System), It.IsIn($"[Test] Parameter {parameters[i].Name} is required"), It.IsIn(Color.Red)), Times.Once);
+                // mockCharacter.Verify(c => c.SendMessage(Moq.It.IsIn(ChatType.System), Moq.It.IsIn($"[Test] Parameter {parameters[i].Name} is required"), Moq.It.IsIn(Color.Red)), Moq.Times.Once);
             }
         }
     }
@@ -72,7 +72,7 @@ public class SubCommandBaseTests
         await Assert.That(subCommand.Executed).IsFalse();
 
         // TODO: Fix this test
-        // mockCharacter.Verify(c => c.SendMessage(It.IsIn(ChatType.System), It.IsIn($"[Test] Parameter prefix {parameters[0].Prefix} is duplicated"), It.IsIn(Color.Red)), Times.Once);
+        // mockCharacter.Verify(c => c.SendMessage(Moq.It.IsIn(ChatType.System), Moq.It.IsIn($"[Test] Parameter prefix {parameters[0].Prefix} is duplicated"), Moq.It.IsIn(Color.Red)), Moq.Times.Once);
     }
 
     [Test]
@@ -103,7 +103,7 @@ public class SubCommandBaseTests
             await Assert.That(parameterKeyValue.Value).IsEqualTo(arguments[counter]);
             counter++;
         }
-        mockCharacter.Verify(c => c.SendMessage(It.IsAny<ChatType>(), It.IsAny<string>(), It.IsAny<Color>()), Times.Never);
+        mockCharacter.Verify(c => c.SendMessage(Moq.It.IsAny<ChatType>(), Moq.It.IsAny<string>(), Moq.It.IsAny<Color>()), Moq.Times.Never);
     }
 
     [Test]
@@ -153,7 +153,7 @@ public class SubCommandBaseTests
             await Assert.That(parameterKeyValue.Value).IsEqualTo(arguments[counter]);
             counter++;
         }
-        mockCharacter.Verify(c => c.SendMessage(It.IsAny<ChatType>(), It.IsAny<string>(), It.IsAny<Color>()), Times.Never);
+        mockCharacter.Verify(c => c.SendMessage(Moq.It.IsAny<ChatType>(), Moq.It.IsAny<string>(), Moq.It.IsAny<Color>()), Moq.Times.Never);
     }
 
     [Test]
@@ -173,7 +173,7 @@ public class SubCommandBaseTests
         await Assert.That(subCommand.Executed).IsFalse();
 
         // TODO: fix this test
-        // mockCharacter.Verify(c => c.SendMessage(It.IsIn<ChatType>(), It.IsIn($"[Test] Parameter [{parameter.DisplayName}] only accepts: {string.Join("||", validValues)}"), It.IsIn(Color.Red)), Times.Once);
+        // mockCharacter.Verify(c => c.SendMessage(Moq.It.IsIn<ChatType>(), Moq.It.IsIn($"[Test] Parameter [{parameter.DisplayName}] only accepts: {string.Join("||", validValues)}"), Moq.It.IsIn(Color.Red)), Moq.Times.Once);
     }
 
     [Test]
@@ -190,10 +190,10 @@ public class SubCommandBaseTests
 
         // Assert
         await Assert.That(subCommand.Executed).IsTrue();
-        Assert.Single(subCommand.Parameters);
+        await Assert.That(subCommand.Parameters).HasSingleItem();
         await Assert.That(subCommand.Parameters["param1"]).IsEqualTo(argumentValue);
 
-        mockCharacter.Verify(c => c.SendMessage(It.IsAny<ChatType>(), It.IsAny<string>(), It.IsAny<Color>()), Times.Never);
+        mockCharacter.Verify(c => c.SendMessage(Moq.It.IsAny<ChatType>(), Moq.It.IsAny<string>(), Moq.It.IsAny<Color>()), Moq.Times.Never);
     }
 
     [Test]
@@ -249,7 +249,7 @@ public class SubCommandBaseTests
                 else
                 {
                     // Any parameters that are not by prefix should not have prefixed argument values
-                    Assert.DoesNotContain(subCommand.Parameters, p => p.Value.ToString() == argument.Split('=')[1]);
+                    await Assert.That(p => p.Value.ToString() == argument.Split('=')[1]).DoesNotContain(subCommand.Parameters);
                 }
             }
             else
@@ -264,7 +264,7 @@ public class SubCommandBaseTests
             }
             counter++;
         }
-        mockCharacter.Verify(c => c.SendMessage(It.IsAny<ChatType>(), It.IsAny<string>(), It.IsAny<Color>()), Times.Never);
+        mockCharacter.Verify(c => c.SendMessage(Moq.It.IsAny<ChatType>(), Moq.It.IsAny<string>(), Moq.It.IsAny<Color>()), Moq.Times.Never);
     }
 
     [Test]
@@ -316,7 +316,7 @@ public class SubCommandBaseTests
         subCommand.BaseSendHelpMessage(new CharacterMessageOutput(mockCharacter.Object));
 
         // Assert
-        mockCharacter.Verify(c => c.SendMessage(ChatType.System, It.Is<string>(call => call.Contains(expectedCallExample)), It.IsAny<Color?>()), Times.Once);
+        mockCharacter.Verify(c => c.SendMessage(ChatType.System, Moq.It.Is<string>(call => call.Contains(expectedCallExample)), Moq.It.IsAny<Color?>()), Moq.Times.Once);
     }
 
     [Test]
@@ -336,7 +336,7 @@ public class SubCommandBaseTests
         subCommand.BaseSendHelpMessage(new CharacterMessageOutput(mockCharacter.Object));
 
         // Assert
-        mockCharacter.Verify(c => c.SendMessage(ChatType.System, It.Is<string>(call => call.Contains(expectedCallExample)), It.IsAny<Color?>()), Times.Once);
+        mockCharacter.Verify(c => c.SendMessage(ChatType.System, Moq.It.Is<string>(call => call.Contains(expectedCallExample)), Moq.It.IsAny<Color?>()), Moq.Times.Once);
     }
 
     [Test]
@@ -438,5 +438,6 @@ public class SubCommandBaseTests
         return argument.IndexOf('=') > -1;
     }
 }
+
 
 #endif

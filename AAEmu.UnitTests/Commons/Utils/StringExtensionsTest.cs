@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Commons.Utils;
 namespace AAEmu.UnitTests.Commons.Utils;
@@ -31,7 +31,7 @@ public class StringExtensionsTest
     public Task FirstCharToUpper_ShouldThrowWhenInvalid(string input)
     {
         // Act & Assert
-        Assert.Throws<ArgumentException>(input.FirstCharToUpper);
+        await Assert.That(input.FirstCharToUpper).Throws<ArgumentException>();
 
         return Task.CompletedTask;
     }
@@ -58,5 +58,6 @@ public class StringExtensionsTest
         return Task.CompletedTask;
     }
 }
+
 
 #endif

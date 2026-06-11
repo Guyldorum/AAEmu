@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 using AAEmu.Game.Utils;
 namespace AAEmu.UnitTests.Game.Utils;
@@ -122,5 +122,6 @@ public class MathUtilTests
         Assert.Equal(expected, result, 2);
     }
 }
+
 
 #endif

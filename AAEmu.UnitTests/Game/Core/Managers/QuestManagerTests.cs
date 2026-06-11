@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
@@ -33,14 +33,14 @@ public class QuestManagerTests
     {
         var mockTaskManager = Mock.Of<ITaskManager>();
         mockTaskManager
-            .Setup(t => t.Schedule(It.IsAny<AAEmu.Game.Models.Tasks.Task>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>()))
+            .Setup(t => t.Schedule(Moq.It.IsAny<AAEmu.Game.Models.Tasks.Task>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>()))
             .Returns(true);
 
         var manager = CreateManager(taskManager: mockTaskManager.Object);
 
         var mockOwner = Mock.Of<ICharacter>();
         mockOwner.SetupGet(c => c.Id).Returns(1u);
-        mockOwner.Setup(c => c.SendDebugMessage(It.IsAny<string>()));
+        mockOwner.Setup(c => c.SendDebugMessage(Moq.It.IsAny<string>()));
 
         var quest = new Quest(
             null,
@@ -56,8 +56,8 @@ public class QuestManagerTests
 
         await Assert.That(result).IsTrue();
         mockTaskManager.Verify(
-            t => t.Schedule(It.IsAny<AAEmu.Game.Models.Tasks.Task>(), TimeSpan.FromMilliseconds(60_000), null, -1),
-            Times.Once);
+            t => t.Schedule(Moq.It.IsAny<AAEmu.Game.Models.Tasks.Task>(), TimeSpan.FromMilliseconds(60_000), null, -1),
+            Moq.Times.Once);
     }
 
     #endregion
@@ -173,7 +173,7 @@ public class QuestManagerTests
     {
         var manager = CreateManager();
 
-        Assert.Throws<ArgumentNullException>(() => manager.GetActTemplate(1, null!));
+        await Assert.That(() => manager.GetActTemplate(1, null!)).Throws<ArgumentNullException>();
     }
 
     #endregion
@@ -344,7 +344,7 @@ public class QuestManagerTests
     {
         var mockTaskManager = Mock.Of<ITaskManager>();
         mockTaskManager
-            .Setup(t => t.Schedule(It.IsAny<AAEmu.Game.Models.Tasks.Task>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>()))
+            .Setup(t => t.Schedule(Moq.It.IsAny<AAEmu.Game.Models.Tasks.Task>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>()))
             .Returns(true);
 
         var manager = CreateManager(taskManager: mockTaskManager.Object);
@@ -366,8 +366,8 @@ public class QuestManagerTests
         manager.EnqueueEvaluation(quest);
 
         mockTaskManager.Verify(
-            t => t.Schedule(It.IsAny<QuestManagerRunQueueTask>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>()),
-            Times.Once);
+            t => t.Schedule(Moq.It.IsAny<QuestManagerRunQueueTask>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>()),
+            Moq.Times.Once);
     }
 
     #endregion
@@ -386,14 +386,14 @@ public class QuestManagerTests
     {
         var mockTaskManager = Mock.Of<ITaskManager>();
         mockTaskManager
-            .Setup(t => t.Schedule(It.IsAny<AAEmu.Game.Models.Tasks.Task>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>()))
+            .Setup(t => t.Schedule(Moq.It.IsAny<AAEmu.Game.Models.Tasks.Task>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>()))
             .Returns(true);
 
         var manager = CreateManager(taskManager: mockTaskManager.Object);
 
         var mockOwner = Mock.Of<ICharacter>();
         mockOwner.SetupGet(c => c.Id).Returns(1u);
-        mockOwner.Setup(c => c.SendDebugMessage(It.IsAny<string>()));
+        mockOwner.Setup(c => c.SendDebugMessage(Moq.It.IsAny<string>()));
 
         var quest = new Quest(
             null,
@@ -419,14 +419,14 @@ public class QuestManagerTests
     {
         var mockTaskManager = Mock.Of<ITaskManager>();
         mockTaskManager
-            .Setup(t => t.Schedule(It.IsAny<AAEmu.Game.Models.Tasks.Task>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>()))
+            .Setup(t => t.Schedule(Moq.It.IsAny<AAEmu.Game.Models.Tasks.Task>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>()))
             .Returns(true);
 
         var manager = CreateManager(taskManager: mockTaskManager.Object);
 
         var mockOwner = Mock.Of<ICharacter>();
         mockOwner.SetupGet(c => c.Id).Returns(1u);
-        mockOwner.Setup(c => c.SendDebugMessage(It.IsAny<string>()));
+        mockOwner.Setup(c => c.SendDebugMessage(Moq.It.IsAny<string>()));
 
         var quest = new Quest(
             null,
@@ -442,8 +442,8 @@ public class QuestManagerTests
 
         await Assert.That(result).IsTrue();
         mockTaskManager.Verify(
-            t => t.Schedule(It.IsAny<AAEmu.Game.Models.Tasks.Task>(), TimeSpan.FromMilliseconds(0), null, -1),
-            Times.Once);
+            t => t.Schedule(Moq.It.IsAny<AAEmu.Game.Models.Tasks.Task>(), TimeSpan.FromMilliseconds(0), null, -1),
+            Moq.Times.Once);
     }
 
     #endregion
@@ -506,18 +506,18 @@ public class QuestManagerTests
     {
         var mockTaskManager = Mock.Of<ITaskManager>();
         mockTaskManager
-            .Setup(t => t.Schedule(It.IsAny<AAEmu.Game.Models.Tasks.Task>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<int>()))
+            .Setup(t => t.Schedule(Moq.It.IsAny<AAEmu.Game.Models.Tasks.Task>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<TimeSpan?>(), Moq.It.IsAny<int>()))
             .Returns(true);
 
         var manager = CreateManager(taskManager: mockTaskManager.Object);
 
         var mockOwner1 = Mock.Of<ICharacter>();
         mockOwner1.SetupGet(c => c.Id).Returns(1u);
-        mockOwner1.Setup(c => c.SendDebugMessage(It.IsAny<string>()));
+        mockOwner1.Setup(c => c.SendDebugMessage(Moq.It.IsAny<string>()));
 
         var mockOwner2 = Mock.Of<ICharacter>();
         mockOwner2.SetupGet(c => c.Id).Returns(2u);
-        mockOwner2.Setup(c => c.SendDebugMessage(It.IsAny<string>()));
+        mockOwner2.Setup(c => c.SendDebugMessage(Moq.It.IsAny<string>()));
 
         var quest1 = new Quest(
             null,
@@ -551,5 +551,6 @@ public class QuestManagerTests
 
     #endregion
 }
+
 
 #endif

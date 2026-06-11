@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using System.Numerics;
 using AAEmu.Game.Core.Managers.Id;
@@ -19,12 +19,12 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
 {
     public class BoatPhysicsManagerTests
     {
-        private readonly Mock<WorldManager> _mockWorldManager;
-        private readonly Mock<WorldInstance> _mockWorld;
-        //private readonly Mock<SlaveManager> _mockSlaveManager;
-        private readonly Mock<Slave> _mockSlave;
-        private readonly Mock<RigidBody> _mockRigidBody;
-        //private readonly Mock<ModelManager> _mockModelManager;
+        private readonly Moq.Mock<WorldManager> _mockWorldManager;
+        private readonly Moq.Mock<WorldInstance> _mockWorld;
+        //private readonly Moq.Mock<SlaveManager> _mockSlaveManager;
+        private readonly Moq.Mock<Slave> _mockSlave;
+        private readonly Moq.Mock<RigidBody> _mockRigidBody;
+        //private readonly Moq.Mock<ModelManager> _mockModelManager;
         private readonly PhysicsManager _boatPhysicsManager;
         private WorldTemplate _worldTemplate;
 
@@ -51,16 +51,16 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
                 ZoneKeys = [0]
             };
             _mockWorldManager = Mock.Of<WorldManager>();
-            _mockWorld = new Mock<WorldInstance>(_mockWorldManager.Object.CreateWorldInstance(_worldTemplate, 0));
+            _mockWorld = new Moq.Mock<WorldInstance>(_mockWorldManager.Object.CreateWorldInstance(_worldTemplate, 0));
             // _mockWorld = Mock.Of<WorldInstance>();
             //_mockSlaveManager = Mock.Of<SlaveManager>();
             _mockSlave = Mock.Of<Slave>();
             var mockShipModel = Mock.Of<ShipModelV1>();
-            _mockRigidBody = new Mock<RigidBody>(new BoxShape(1, 1, 1));
+            _mockRigidBody = new Moq.Mock<RigidBody>(new BoxShape(1, 1, 1));
 
             // Configure ModelManager to return _mockShipModel.Object for GetShipModel
             //_mockModelManager = Mock.Of<ModelManager>();
-            //_mockModelManager.Setup(mm => mm.GetShipModel(It.IsAny<uint>())).Returns(mockShipModel.Object);
+            //_mockModelManager.Setup(mm => mm.GetShipModel(Moq.It.IsAny<uint>())).Returns(mockShipModel.Object);
 
             _boatPhysicsManager = new PhysicsManager
             {
@@ -111,7 +111,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             // Assert
             await Assert.That(_boatPhysicsManager.PhysWorld).IsNotNull();
             await Assert.That(_boatPhysicsManager.Buoyancy).IsNotNull();
-            //_mockWorld.Verify(w => w.HeightMaps, Times.Once);
+            //_mockWorld.Verify(w => w.HeightMaps, Moq.Times.Once);
         }
 
         //[Test]
@@ -159,7 +159,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
 
             // Assert
             await Assert.That(_mockRigidBody.Object.IsActive).IsFalse();
-            Assert.DoesNotContain(_mockRigidBody.Object, _boatPhysicsManager.PhysWorld.RigidBodies);
+            await Assert.That(_boatPhysicsManager.PhysWorld.RigidBodies).DoesNotContain(_mockRigidBody.Object);
         }
 
         //[Test]
@@ -311,7 +311,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         //    _boatPhysicsManager.AddShip(mockSlave.Object);
 
         //    // Assert
-        //    mockSlave.VerifySet(s => s.RigidBody = It.IsAny<RigidBody>(), Times.Once);
+        //    mockSlave.VerifySet(s => s.RigidBody = Moq.It.IsAny<RigidBody>(), Moq.Times.Once);
         //    await Assert.That(mockSlave.Object.RigidBody).IsNotNull();
         //}
 
@@ -326,7 +326,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         //    _boatPhysicsManager.StartPhysics();
 
         //    // Assert
-        //    mockThread.Verify(t => t.Start(), Times.Once());
+        //    mockThread.Verify(t => t.Start(), Moq.Times.Once());
         //    await Assert.That(_boatPhysicsManager.ThreadRunning).IsTrue();
         //}
 
@@ -335,7 +335,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         //{
         //    // Arrange
         //    var mockModelManager = Mock.Of<IModelManager>();
-        //    mockModelManager.Setup(mm => mm.GetShipModel(It.IsAny<uint>())).Returns(_mockShipModel.Object);
+        //    mockModelManager.Setup(mm => mm.GetShipModel(Moq.It.IsAny<uint>())).Returns(_mockShipModel.Object);
 
         //    var _boatPhysicsManager = new BoatPhysicsManager(mockModelManager.Object);
         //    _boatPhysicsManager._physWorld = new Jitter.World(new CollisionSystemSAP());
@@ -405,9 +405,10 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
 
         //    // Assert
         //    // Verify that buoyancy and drag forces are added
-        //    _mockRigidBody.Verify(rb => rb.AddForce(It.IsAny<JVector>()), Times.Exactly(2));
+        //    _mockRigidBody.Verify(rb => rb.AddForce(Moq.It.IsAny<JVector>()), Moq.Times.Exactly(2));
         //}
     }
 }
+
 
 #endif

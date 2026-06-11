@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 using AAEmu.Game.Core.Managers;
 namespace AAEmu.UnitTests.Game.Core.Managers;
@@ -27,8 +27,9 @@ public class AccountManagerTests
         var manager = new AccountManager(mockTick.Object, Mock.Of<ITimedRewardsManager>().Object);
         manager.Initialize();
 
-        mockTick.Verify(t => t.OnTick, Times.Once);
+        mockTick.Verify(t => t.OnTick, Moq.Times.Once);
     }
 }
+
 
 #endif

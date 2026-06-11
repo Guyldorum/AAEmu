@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
@@ -14,8 +14,9 @@ public class SubZoneManagerTests
         var manager = new SubZoneManager(mockWorld.Object, Mock.Of<IZoneManager>().Object);
         manager.Load();
 
-        mockWorld.Verify(w => w.GetWorlds(), Times.Once);
+        mockWorld.Verify(w => w.GetWorlds(), Moq.Times.Once);
     }
 }
+
 
 #endif

@@ -1,4 +1,4 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
+// === PHASE 12.2.b TODO === résidus typage TUnit ou patterns non couverts par lot-12.2.a
 #if false
 ﻿using AAEmu.Game.Services.WebApi;
 using AAEmu.Game.Services.WebApi.Controllers;
@@ -21,7 +21,7 @@ public class RouteMapperTests
         // Assert
         await Assert.That(route).IsNotNull();
         await Assert.That(matches).IsNotNull();
-        Assert.Single(matches);
+        await Assert.That(matches).HasSingleItem();
         await Assert.That(route.Path).IsEqualTo("/world/logged-characters");
 
         return Task.CompletedTask;
@@ -45,7 +45,7 @@ public class RouteMapperTests
         // Assert
         await Assert.That(route).IsNotNull();
         await Assert.That(matches).IsNotNull();
-        Assert.Single(matches);
+        await Assert.That(matches).HasSingleItem();
         Assert.Equal("/world/logged-characters", route.Path, true);
 
         return Task.CompletedTask;
@@ -64,7 +64,7 @@ public class RouteMapperTests
         // Assert
         await Assert.That(route).IsNotNull();
         await Assert.That(matches).IsNotNull();
-        Assert.Single(matches);
+        await Assert.That(matches).HasSingleItem();
         await Assert.That(matches[0].Groups[1].Value).IsEqualTo("logged-characters");
         await Assert.That(matches[0].Groups[0].Value).IsEqualTo("/world/logged-characters");
 
@@ -105,6 +105,7 @@ public class RouteMapperTests
         }
     }
 }
+
 
 
 #endif

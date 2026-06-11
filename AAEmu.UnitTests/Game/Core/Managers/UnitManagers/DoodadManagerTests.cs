@@ -1,5 +1,3 @@
-// === PHASE 12.2 TODO === migration manuelle requise (build KO après migration mécanique lot-12.1)
-#if false
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
@@ -196,7 +194,7 @@ public class DoodadManagerTests
         var templates = new Dictionary<uint, DoodadTemplate>();
         SetPrivateField(manager, "_templates", templates);
 
-        var mockWorld = new Mock<WorldInstance>(MockBehavior.Loose, new WorldTemplate { Id = 1, Name = "TestWorld" }, 1u, false, 1u);
+        var mockWorld = new Moq.Mock<WorldInstance>(Moq.MockBehavior.Loose, new WorldTemplate { Id = 1, Name = "TestWorld" }, 1u, false, 1u);
 
         // Act
         var result = manager.Create(mockWorld.Object, 0, 999, null, true);
@@ -623,8 +621,8 @@ public class DoodadManagerTests
         await Assert.That(result).Contains(1u);
         await Assert.That(result).Contains(2u);
         await Assert.That(result).Contains(4u);
-        Assert.DoesNotContain(3u, result);
-        Assert.DoesNotContain(5u, result);
+        await Assert.That(result).DoesNotContain(3u);
+        await Assert.That(result).DoesNotContain(5u);
     }
 
     [Test]
@@ -968,4 +966,3 @@ public class DoodadManagerTests
     #endregion
 }
 
-#endif
