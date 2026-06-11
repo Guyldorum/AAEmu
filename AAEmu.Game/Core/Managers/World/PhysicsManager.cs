@@ -499,7 +499,7 @@ public class PhysicsManager
         {
             pos.Y = oceanLevel - equilibriumDraft;
         }
-        Logger.Info($"[SPAWNDIAG] {slave.Name} spawnInit origY={originalSpawnY:F2} ocean={oceanLevel:F2} draft={equilibriumDraft:F3} snapped={nearWaterSurface} → finalY={pos.Y:F2}");
+        Logger.Debug($"[SPAWNDIAG] {slave.Name} spawnInit origY={originalSpawnY:F2} ocean={oceanLevel:F2} draft={equilibriumDraft:F3} snapped={nearWaterSurface} → finalY={pos.Y:F2}");
 
         //                                     Width                   Length                  Height
         // var dimensions = new JVector(shipModel.MassBoxSizeX, shipModel.MassBoxSizeY, shipModel.MassBoxSizeZ);
@@ -536,7 +536,7 @@ public class PhysicsManager
         slave.RigidBody.AffectedByGravity = false;
         slave.RigidBody.Velocity = JVector.Zero;
         slave.RigidBody.AngularVelocity = JVector.Zero;
-        Logger.Info($"[SPAWNDIAG] {slave.Name} AddShip post-add: gravity disabled, velocities zeroed (preventing 236ms gravity gap)");
+        Logger.Debug($"[SPAWNDIAG] {slave.Name} AddShip post-add: gravity disabled, velocities zeroed (preventing 236ms gravity gap)");
 
         Logger.Debug($"AddShip {slave.Name} -> {SimulationWorld.Template.Name}");
     }

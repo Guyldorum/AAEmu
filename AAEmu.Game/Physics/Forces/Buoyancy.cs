@@ -245,13 +245,13 @@ public class Buoyancy : ForceGenerator
                     // doesn't write v_new = -g*dt at end-of-tick (which would persist past the
                     // last settling tick into the release tick and cause oscillation).
                     body.AffectedByGravity = false;
-                    SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK Y={lockedPos.Y:F3} velocities=0 gravity=off (remaining={(settlingEnd - DateTime.UtcNow).TotalSeconds:F2}s)");
+                    SpawnDiagLogger.Debug($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK Y={lockedPos.Y:F3} velocities=0 gravity=off (remaining={(settlingEnd - DateTime.UtcNow).TotalSeconds:F2}s)");
                     continue;
                 }
                 else
                 {
                     _settlingEndsAt.Remove(slave.Id);
-                    SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK released, normal buoyancy resumes");
+                    SpawnDiagLogger.Debug($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK released, normal buoyancy resumes");
                 }
             }
 
@@ -271,7 +271,7 @@ public class Buoyancy : ForceGenerator
                 }
                 var localDepth = Math.Max(0, localOceanLvl - body.Position.Y);
                 var phaseTag = inPortal ? "PORTAL" : "ACTIVE";
-                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} t={timeSinceSpawn:F3}s phase={phaseTag} posY={body.Position.Y:F3} ocean={localOceanLvl:F3} depth={localDepth:F3} velY={body.Velocity.Y:F3}");
+                SpawnDiagLogger.Debug($"[SPAWNDIAG] {slave.Name} t={timeSinceSpawn:F3}s phase={phaseTag} posY={body.Position.Y:F3} ocean={localOceanLvl:F3} depth={localDepth:F3} velY={body.Velocity.Y:F3}");
             }
 
             // [lot-10.1.1] Corrective snap at the exact frame AffectedByGravity flips false->true.
@@ -292,7 +292,7 @@ public class Buoyancy : ForceGenerator
                 // [lot-10.1.2] Start 2s settling window — locks Y/velocities each tick
                 // to defeat external position perturbations (replication smoothing etc.).
                 _settlingEndsAt[slave.Id] = DateTime.UtcNow.AddSeconds(2);
-                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} POST-PORTAL CORRECTIVE SNAP: preSnapY={preSnapY:F3} -> snappedY={snappedPos.Y:F3} (ocean={WaterSurfaceLevel:F3} draft={draft:F3}) velocities zeroed, settling 2s");
+                SpawnDiagLogger.Debug($"[SPAWNDIAG] {slave.Name} POST-PORTAL CORRECTIVE SNAP: preSnapY={preSnapY:F3} -> snappedY={snappedPos.Y:F3} (ocean={WaterSurfaceLevel:F3} draft={draft:F3}) velocities zeroed, settling 2s");
             }
             if (!body.AffectedByGravity)
             {
@@ -331,7 +331,7 @@ public class Buoyancy : ForceGenerator
             if (timeSincePortal >= 0 && timeSincePortal < 3.0)
             {
                 var buoyMag = submergedDepth * body.Mass * Density * ShipWaterDensityMul * 9.81f;
-                SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} t={timeSincePortal:F3}s posY={body.Position.Y:F3} ocean={waterSurfaceLevel:F3} depth={submergedDepth:F3} velY={body.Velocity.Y:F3} buoyF={buoyMag:F1}");
+                SpawnDiagLogger.Debug($"[SPAWNDIAG] {slave.Name} t={timeSincePortal:F3}s posY={body.Position.Y:F3} ocean={waterSurfaceLevel:F3} depth={submergedDepth:F3} velY={body.Velocity.Y:F3} buoyF={buoyMag:F1}");
             }
         }
     }
