@@ -1644,6 +1644,23 @@ public partial class Npc : Unit
         Ai.PathNode.ZoneKey = Ai.Owner.Transform.ZoneId;
         Ai.PathNode.StartPointPos = start;
         Ai.PathNode.EndPointPos = goal;
+
+        // [lot-5b.o] LoS shortcut: si pas d'obstacle statique entre l'NPC et sa
+        // cible, on bypass le A* navmesh et on renvoie un path direct [goal].
+        // Évite le zigzag inutile entre nodes sur terrain dégagé (lande Cendrepierre,
+        // plaines, mer ouverte) tout en préservant le pathfinding A* quand un mur
+        // ou une structure bloque la ligne directe (Nécropole, donjons).
+        // HasLineOfSight = DynamicTree.RayCast O(log N) + cache TTL 500ms,
+        // partagé avec le check LoS combat (Phase 5.1) — coût négligeable.
+        // Retourner [goal] est un pattern déjà validé par PathNode.FindPath
+        // (cas trivial posStart.Id == posEnd.Id).
+        if (Ai.Owner.HasLineOfSight(abuser))
+        {
+            var directPath = new List<Vector3> { goal };
+            Ai.PathNode.FoundPath = new Queue<Vector3>(directPath);
+            return directPath;
+        }
+
         var path = Ai.PathNode.FindPath(Ai.Owner.ParentWorld, start, goal, out _);
         Ai.PathNode.FoundPath = new Queue<Vector3>(path);
         return path;

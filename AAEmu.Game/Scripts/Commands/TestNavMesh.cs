@@ -1,5 +1,8 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
+using System.IO;
 using System.Numerics;
+using AAEmu.Commons.IO;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
@@ -30,7 +33,7 @@ public class TestNavMesh : ICommand
 
     public string GetCommandHelpText()
     {
-        return "Shows route to target";
+        return "Shows route to target. Modes: (no arg)=FindPath actuel, 'astar'=A* direct, 'los'=diag LoS shortcut (lot-5b.o)";
     }
 
     private static void ClearMarkers()
@@ -67,6 +70,66 @@ public class TestNavMesh : ICommand
         var world = character.ParentWorld;
         var pos = world.Template.GeoData.FindСlosestToTheCurrent(npc.Transform.ZoneId, npc.Transform.World.Position, 0);
         messageOutput.SendMessage($"Closest to {npc.Transform.World.Position} -> {pos}");
+        // [lot-5b.o] sub-command 'los' : diag du LoS-shortcut. Vérifie HasLineOfSight,
+        // affiche la décision (direct vs A*), et écrit Data/Custom/losnavtest.csv.
+        var useLos = args.Length > 0 && string.Equals(args[0], "los", System.StringComparison.OrdinalIgnoreCase);
+        if (useLos)
+        {
+            var losStart = npc.Transform.World.Position;
+            var losGoal = character.Transform.World.Position;
+            var distance = (losGoal - losStart).Length();
+
+            var losWatch = new Stopwatch();
+            losWatch.Start();
+            var hasLos = npc.HasLineOfSight(character);
+            losWatch.Stop();
+
+            var decision = hasLos ? "DIRECT" : "ASTAR";
+            messageOutput.SendMessage($"[lot-5b.o LoS diag]");
+            messageOutput.SendMessage($"  NPC: {npc.Name} (objId={npc.ObjId}, tpl={npc.TemplateId})");
+            messageOutput.SendMessage($"  Distance: {distance:F1}m");
+            messageOutput.SendMessage($"  HasLineOfSight: {hasLos} (took {(long)losWatch.Elapsed.TotalMicroseconds}us)");
+            messageOutput.SendMessage($"  Decision: {decision}");
+
+            // Marker à la cible
+            AddDoodadMarker(world, losGoal, hasLos ? crescentThroneFlagDoodad : stonePostDoodad);
+
+            // Si LoS bloqué, run A* aussi pour montrer le chemin alternatif
+            if (!hasLos)
+            {
+                npc.Ai.PathNode.ZoneKey = character.Transform.ZoneId;
+                var fallbackPath = npc.Ai.PathNode.FindPath(
+                    npc.ParentWorld, losStart, losGoal, out _).ToList();
+                messageOutput.SendMessage($"  A* fallback path: {fallbackPath.Count} nodes");
+                foreach (var v3 in fallbackPath)
+                {
+                    AddDoodadMarker(world, v3, stonePostDoodad);
+                }
+            }
+
+            // CSV log Data/Custom/losnavtest.csv (header auto)
+            try
+            {
+                var csvDir = Path.Combine(FileManager.AppPath, "Data", "Custom");
+                Directory.CreateDirectory(csvDir);
+                var csvFile = Path.Combine(csvDir, "losnavtest.csv");
+                var needsHeader = !File.Exists(csvFile);
+                using var writer = new StreamWriter(csvFile, append: true);
+                if (needsHeader)
+                {
+                    writer.WriteLine("timestamp;world;npcName;npcObjId;templateId;npcX;npcY;npcZ;targetName;targetX;targetY;targetZ;distance;hasLos;losUs;decision");
+                }
+                var ts = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                writer.WriteLine($"{ts};{world.Template.Name};{npc.Name};{npc.ObjId};{npc.TemplateId};{losStart.X:F2};{losStart.Y:F2};{losStart.Z:F2};{character.Name};{losGoal.X:F2};{losGoal.Y:F2};{losGoal.Z:F2};{distance:F2};{hasLos};{(long)losWatch.Elapsed.TotalMicroseconds};{decision}");
+                messageOutput.SendMessage($"  CSV: Data/Custom/losnavtest.csv (append)");
+            }
+            catch (Exception ex)
+            {
+                messageOutput.SendMessage($"  CSV write error: {ex.Message}");
+            }
+            return;
+        }
+
         var watch = new Stopwatch();
         watch.Start();
         // 5b diag: sub-command 'astar' switches to PathNode.FindPath (A* on NetMission)
