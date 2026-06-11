@@ -235,7 +235,11 @@ public class Buoyancy : ForceGenerator
                     body.Position = lockedPos;
                     body.Velocity = JVector.Zero;
                     body.AngularVelocity = JVector.Zero;
-                    SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK Y={lockedPos.Y:F3} velocities=0 (remaining={(settlingEnd - DateTime.UtcNow).TotalSeconds:F2}s)");
+                    // [lot-10.1.4] Also disable gravity during settling so Jitter2 integrator
+                    // doesn't write v_new = -g*dt at end-of-tick (which would persist past the
+                    // last settling tick into the release tick and cause oscillation).
+                    body.AffectedByGravity = false;
+                    SpawnDiagLogger.Info($"[SPAWNDIAG] {slave.Name} SETTLING-LOCK Y={lockedPos.Y:F3} velocities=0 gravity=off (remaining={(settlingEnd - DateTime.UtcNow).TotalSeconds:F2}s)");
                     continue;
                 }
                 else
