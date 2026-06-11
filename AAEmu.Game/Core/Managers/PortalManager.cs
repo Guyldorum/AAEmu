@@ -422,6 +422,11 @@ public class PortalManager(ILocalizationManager localizationManager, IWorldManag
         character.SendPacket(new SCTeleportUnitPacket(0, 0, portalInfo.TeleportPosition.World.Position.X,
             portalInfo.TeleportPosition.World.Position.Y, portalInfo.TeleportPosition.World.Position.Z,
             portalInfo.TeleportPosition.World.Rotation.Z.DegToRad()));
+
+        // [lot-11.2] Trigger immédiat du scan-spawners pour révéler les NPCs autour
+        // du joueur sans attendre le prochain ActiveRegionTick (jusqu'à 1s d'attente).
+        // Couvre book de retour, portail public, worldgate, recall.
+        WorldManager.Instance.OnCharacterTeleported(character);
     }
 
     public static void DeletePortal(Character owner, byte type, uint id)

@@ -178,34 +178,65 @@ public class WorldManager(
             foreach (var slave in world.GetAllSlaves())
                 slave.OnActiveRegionTick(delta);
 
-            var npcSpawners = world.SpawnManager.GetAllSpawners();
-
-            // Spawner filtering
-            if (sw.ElapsedMilliseconds > 50)
-            {
-                Logger.Debug($"Processed in world {world.Template.Name} {npcSpawners.Count} spawners...");
-            }
-
-            var activeSpawners = npcSpawners.Values.SelectMany(x => x)
-                .Where(spawner => spawner.Template != null && IsSpawnerActive(spawner))
-                .ToList();
-
-            // Consistent processing of spawners
-            if (sw.ElapsedMilliseconds > 50)
-            {
-                Logger.Debug($"Processed {activeSpawners.Count} active spawners...");
-            }
-
-            foreach (var npcSpawner in activeSpawners)
-            {
-                npcSpawner.Update();
-            }
+            // [lot-11.2] Spawner scan + Update extracted to ProcessActiveSpawnersForWorld
+            // so it can be triggered explicitly post-teleport (OnCharacterTeleported).
+            ProcessActiveSpawnersForWorld(world, sw);
         }
 
         sw.Stop();
         if (sw.ElapsedMilliseconds > 100)
         {
             Logger.Warn($"ActiveRegionTick took {sw.ElapsedMilliseconds} ms");
+        }
+    }
+
+    /// <summary>
+    /// [lot-11.2] Scan + Update des spawners actifs pour un world donné. Extrait du
+    /// corps de ActiveRegionTick pour pouvoir être déclenché explicitement post-TP.
+    /// Coûteux (100-1500ms typique sur main_world) — ne pas appeler en hot path.
+    /// </summary>
+    private void ProcessActiveSpawnersForWorld(WorldInstance world, Stopwatch sw = null)
+    {
+        var npcSpawners = world.SpawnManager.GetAllSpawners();
+
+        if (sw != null && sw.ElapsedMilliseconds > 50)
+        {
+            Logger.Debug($"Processed in world {world.Template.Name} {npcSpawners.Count} spawners...");
+        }
+
+        var activeSpawners = npcSpawners.Values.SelectMany(x => x)
+            .Where(spawner => spawner.Template != null && IsSpawnerActive(spawner))
+            .ToList();
+
+        if (sw != null && sw.ElapsedMilliseconds > 50)
+        {
+            Logger.Debug($"Processed {activeSpawners.Count} active spawners...");
+        }
+
+        foreach (var npcSpawner in activeSpawners)
+        {
+            npcSpawner.Update();
+        }
+    }
+
+    /// <summary>
+    /// [lot-11.2] Trigger explicite post-téléportation pour rafraîchir les spawners
+    /// actifs autour du joueur immédiatement, sans attendre le prochain tick 1s.
+    /// À appeler après que la position serveur du character est mise à jour (sites :
+    /// PortalManager après Transform = ..., Character.SetPosition si ZoneId change).
+    /// </summary>
+    public void OnCharacterTeleported(Character character)
+    {
+        if (character == null) return;
+        var world = GetWorld(character.Transform.WorldId);
+        if (world == null) return;
+        var sw = new Stopwatch();
+        sw.Start();
+        ProcessActiveSpawnersForWorld(world, sw);
+        sw.Stop();
+        if (sw.ElapsedMilliseconds > 100)
+        {
+            Logger.Warn($"OnCharacterTeleported({character.Name}) took {sw.ElapsedMilliseconds} ms");
         }
     }
 

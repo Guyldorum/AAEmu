@@ -1588,6 +1588,18 @@ public partial class Character : Unit, ICharacter
 
         base.SetPosition(x, y, z, rotationX, rotationY, rotationZ);
 
+        // [lot-11.2] Si la nouvelle position franchit une frontière de zone, déclencher
+        // un scan-spawners immédiat. Couvre les déplacements véhicule qui traversent
+        // plusieurs zones (sinon les NPCs apparaissent au compte-gouttes au rythme du
+        // tick 1s). On NE déclenche PAS sur les déplacements intra-zone (packets
+        // client à 10-30 Hz) car le coût d'un scan est de 100-1500ms — saturerait
+        // le main thread. Le tick 1s normal couvre les nouveaux spawners qui entrent
+        // à portée à l'intérieur d'une même zone.
+        if (lastZoneKey != Transform.ZoneId)
+        {
+            WorldManager.Instance.OnCharacterTeleported(this);
+        }
+
         // [lot-7.5.e.5] Breath check via IsWater volume test (covers ocean + inland lakes/rivers
         // ingested by lot-7.5.e.3). Replaces HM legacy `Z < OceanLevel - 2f` which only worked
         // for global ocean. Threshold + hysteresis (35cm dead band) for stable enter/exit.
