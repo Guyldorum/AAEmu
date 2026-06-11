@@ -600,20 +600,28 @@ public class ShipController(World world, ShipModelV1 shipModel)
         var turnMulA = 1f - MathF.Exp(-ShipMotionDefaults.TurnSpeedVelocityMulResponse * MathF.Max(0f, dtSec));
         slave.TurnSpeedVelocityMul += (targetTurnVelMul - slave.TurnSpeedVelocityMul) * turnMulA;
 
-        // Slow down turning if no steering active
-        const float AngularDamping = 0.975f; // Damping of angular velocity
+        // Slow down turning if no steering active.
+        // [lot-10.3] Frame-rate independent angular damping. Previous 0.975 per-tick
+        // was designed assuming ~25 TPS but physics thread runs at 10-14 TPS effective
+        // on HM (16k+ rigid bodies = voxels + brushes), making rotation damping ~2x
+        // slower than intended. Switch to exponential decay rate for consistent
+        // behavior regardless of TPS. AngularDampingRate=0.633/s reproduces 0.975
+        // at 25 TPS exactly (0.975^25 = 0.531 per sec, rate = -ln(0.531) = 0.633).
+        const float AngularDampingRate = 0.633f;
         if (slave.Steering == 0)
         {
-            slave.RotSpeed *= AngularDamping;
+            slave.RotSpeed *= MathF.Exp(-AngularDampingRate * dtSec);
         }
 
-        // If not in water, seriously slow down the velocity
-        const float FloorCollisionSpeedMultiplier = 0.96f;
+        // If not in water, seriously slow down the velocity.
+        // [lot-10.3] Frame-rate independent floor collision damping. Equivalent to 0.96
+        // at 25 TPS via exponential decay rate (-ln(0.96^25) = 1.022 /s).
+        const float FloorCollisionDampingRate = 1.022f;
         if (isGroundedForSpeedCaps)
         {
             // While applying escape throttle, do not damp speed/velocity — otherwise it creates an artificial
             // steady-state ceiling well below GroundEscapeMaxSpeedAbs (e.g. ~0.7).
-            var groundDamping = isEscapeInputOnGround ? 1.0f : FloorCollisionSpeedMultiplier;
+            var groundDamping = isEscapeInputOnGround ? 1.0f : MathF.Exp(-FloorCollisionDampingRate * dtSec);
             slave.Speed *= groundDamping;
             slave.RigidBody.Velocity *= groundDamping;
         }
